@@ -1,16 +1,39 @@
 #!/usr/bin/env python3
-"""Exercise CI selection against real Git histories, including a fresh root."""
+"""Exercise CI selection, fresh Git histories and Python entry-point imports."""
 
 import importlib.util
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
 
-SPEC = importlib.util.spec_from_file_location("ci_select", Path(__file__).with_name("select.py"))
+SPEC = importlib.util.spec_from_file_location("ci_select", Path(__file__).with_name("select-scope.py"))
 SELECT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SELECT)
+
+
+class EntrypointImportTests(unittest.TestCase):
+    def test_ci_script_names_do_not_shadow_standard_library(self):
+        # Built-in modules and preload order differ between Python builds.
+        # Check names independently of this interpreter's import resolution.
+        directory = Path(__file__).resolve().parent
+        conflicts = sorted(str(path.relative_to(directory))
+                           for path in directory.rglob("*.py")
+                           if path.stem in sys.stdlib_module_names)
+        self.assertEqual(conflicts, [], "CI scripts must not shadow Python's standard library")
+
+    def test_settings_protocol_runner_imports_before_refusing_host_execution(self):
+        # No arguments: only imports and the refusal guard can run. Skip site
+        # initialization without hiding the script directory from Python.
+        result = subprocess.run(
+            [sys.executable, "-S", str(Path(__file__).with_name("settings-services.py"))],
+            capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.stderr.strip(),
+                         "Requires the ordinary build user in the native Alpine acceptance container")
 
 
 class SelectionTests(unittest.TestCase):

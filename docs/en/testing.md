@@ -137,7 +137,7 @@ python3 tools/test-package-metadata.py
 python3 scripts/ci/settings/test-observer.py
 ```
 
-They test path/mode selection, metadata parsing/drift and the private terminal observer's framing and redaction. They do not replace the application source or runtime gates.
+They test path/mode selection, CI script names against Python standard-library collisions, safe startup of the Settings protocol runner, metadata parsing/drift and the private terminal observer's framing and redaction. The startup check stops at the runner's environment guard; it does not start a private bus or execute an integration case. These fixtures do not replace the application source or runtime gates.
 
 ### Manual acceptance mode
 
