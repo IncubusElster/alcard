@@ -1,0 +1,20 @@
+schema_version = 1
+
+[theme]
+id = "emerald"
+name = "Emerald"
+icon_style = "outline"
+
+[palette]
+background = "#0E1E1A"
+surface = "#18362E"
+selected = "#285647"
+text = "#E0F1E8"
+muted = "#A8C7BA"
+accent = "#8EE3AE"
+border = "#466C5D"
+disabled = "#78968A"
+success = "#85D59C"
+warning = "#F5C56B"
+error = "#F08B8B"
+

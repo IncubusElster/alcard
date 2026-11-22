@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: GPL-2.0-only
+pkgname=alcard-board-zero-v5
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Cardputer Zero v5 board profile (BMI270/BMM150, optional IMX219)"
+url="https://github.com/IncubusElster/alcard"
+arch="noarch"
+license="GPL-2.0-only"
+options="!strip"
+depends="alcard-bsp-zero=0.1.0-r2 !alcard-board-zero-v5-lite"
+source="$pkgname-$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+sha512sums=""
+
+check() {
+    local cfg="$builddir/alcard.cfg"
+    [ -s "$cfg" ] || die "Missing full v5 profile"
+    [ "$(grep -cx 'dtoverlay=alcard-zero-v5' "$cfg")" -eq 1 ] ||
+        die "Expected exactly one v5 mainboard overlay"
+    [ "$(grep -cx 'dtoverlay=alcard-bq27220-v5' "$cfg")" -eq 1 ] ||
+        die "Expected exactly one v5 battery overlay"
+    [ "$(grep -cx 'dtoverlay=alcard-bmi270-bmm150' "$cfg")" -eq 1 ] ||
+        die "Full v5 must enable BMI270+BMM150"
+    ! grep -Eq '^dtoverlay=alcard-bmi270-only(,|$)' "$cfg" ||
+        die "Conflicting BMI270-only profile enabled"
+    ! grep -Eq '^dtoverlay=imx219(,|$)' "$cfg" ||
+        die "IMX219 must be opt-in until hardware test"
+}
+
+package() {
+    install -Dm644 "$builddir/alcard.cfg" "$pkgdir/boot/alcard.cfg"
+}

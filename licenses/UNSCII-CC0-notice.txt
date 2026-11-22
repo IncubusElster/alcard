@@ -1,0 +1,25 @@
+UNSCII / Alcard Pixel font data
+
+Upstream: Viznut, https://github.com/viznut/unscii
+Reviewed revision: 257b4dfeb50651510fe8b9cf4f151a148a4490e4
+Declaration: README.md at that revision
+
+Upstream licensing declaration (verbatim):
+"Licensing: You can consider it Public Domain (or CC-0) except for the files
+derived from or containing parts of Roman Czyborra's Unifont project
+(unifont.hex, hex2bdf.pl, unscii-16-full.*) which fall under GPL. See
+https://savannah.gnu.org/projects/unifont/ for more."
+
+AlcardPixel-Bold.hex is the upstream fontfiles/unscii-8.hex data under a new
+filename. AlcardPixel-Regular.hex is a modified fontfiles/unscii-8-thin.hex.
+Alcard's font packages designate both font data files, including the Regular
+edits, CC0-1.0. See CC0-1.0.txt for the legal text. The default GPL license for
+Alcard software and tools does not replace that designation for the font data.
+
+Both source files contain 3191 records, including U+0000. The Regular file has
+239 changed glyph bitmaps compared with the reviewed thin file, with no added
+or removed codepoints. This is different from the 518 bitmap differences
+between Alcard Regular and Bold. These fonts are not unscii-16-full.
+
+Source data, hashes and conversion boundaries are documented in
+THIRD_PARTY_NOTICES.md and docs/en/fonts-keyboard.md.

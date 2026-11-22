@@ -1,0 +1,15 @@
+# Greetd handles authentication; agreety is only the tiny text prompt.
+# Keep this on tty1 without a competing getty or OpenRC greetd service.
+[general]
+# PAM registers the authenticated user's Wayland session before the launcher.
+service = "alcard-greetd"
+
+[terminal]
+vt = 1
+switch = true
+
+[default_session]
+command = "agreety --cmd /usr/libexec/alcard/start-session"
+user = "greeter"
+# The text greeter keeps the distribution stack and its separate session class.
+service = "greetd"

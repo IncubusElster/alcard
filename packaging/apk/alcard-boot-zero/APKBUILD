@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Alcard Cardputer Zero v5 board DTBO and Raspberry Pi boot profile.
+pkgname=alcard-boot-zero
+pkgver=0.1.0
+pkgrel=4
+pkgdesc="Cardputer Zero common v5 Device Tree overlay resources"
+url="https://github.com/IncubusElster/alcard"
+arch="noarch"
+license="GPL-2.0-only"
+options="!strip"
+depends="linux-rpi=6.18.60-r0 alcard-kmods-rpi=6.18.60-r3 alcard-firmware-zero>=0.1.0-r2"
+makedepends="dtc"
+source="$pkgname-$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+# Calculated by abuild checksum ONLY inside the ignored local workspace.
+sha512sums=""
+
+# This package installs directly under /boot, the Raspberry Pi FAT boot mount
+# in an installed Alpine sys-mode system. It does NOT edit config.txt.
+_dtbos="alcard-zero-v5 alcard-bq27220-v5 alcard-bmi270-bmm150 alcard-bmi270-only"
+
+build() {
+    local name source
+    for name in $_dtbos; do
+        case "$name" in
+            alcard-bq27220-v5) source=bq27220-v5 ;;
+            alcard-bmi270-bmm150) source=bmi270-bmm150 ;;
+            alcard-bmi270-only) source=bmi270-only ;;
+            *) source="$name" ;;
+        esac
+        dtc -@ -I dts -O dtb -o "$builddir/$name.dtbo" \
+            "$builddir/board/cardputer-zero/device-tree/$source.dts" ||
+            return 1
+    done
+}
+
+check() {
+    local name
+    for name in $_dtbos; do
+        [ -s "$builddir/$name.dtbo" ] || die "Missing $name.dtbo"
+        # Validate blob format and live properties, not a standalone
+        # decompilation: unresolved overlay phandles are false warnings when
+        # analyzed without their Raspberry Pi base DTB.
+        [ "$(fdtget -t s "$builddir/$name.dtbo" / compatible)" = "brcm,bcm2835" ] ||
+            die "Invalid DTBO root compatible: $name"
+    done
+
+    # The AUX chip is a platform device under /, not a child of a
+    # real I2C bus. Verify its dedicated address property and matching driver.
+    local bridge="$builddir/alcard-bmi270-bmm150.dtbo"
+    [ "$(fdtget -t s "$bridge" /fragment@1/__overlay__/magnetometer compatible)" = "bosch,bmm150-bmi270" ] ||
+        die 'Missing BMM150 AUX bridge node'
+    [ "$(fdtget -t x "$bridge" /fragment@1/__overlay__/magnetometer bosch,aux-i2c-addr)" = "10" ] ||
+        die 'BMM150 AUX I2C address must be 0x10'
+    ! fdtget "$bridge" /fragment@1/__overlay__/magnetometer reg >/dev/null 2>&1 ||
+        die 'BMM150 bridge must not contain root-level reg'
+
+    # Exactly one active SPI0 CS0 display in the integrated board overlay.
+    local base="$builddir/board/cardputer-zero/device-tree/alcard-zero-v5.dts"
+    [ "$(grep -c 'display@0 {' "$base")" -eq 1 ] ||
+        die 'Expected exactly one upstream DRM display@0'
+    ! grep -q 'st7789v@0 {' "$base" ||
+        die 'Legacy SPI0 CS0 display still exists'
+    grep -q '"cardputerzero,st7789v", "panel-mipi-dbi-spi"' "$base" ||
+        die 'Wrong panel compatible / firmware filename'
+    # Fn+Esc is the only functional shortcut override; Sym '>' keeps its
+    # original printed character through a standard KEY_YEN XKB code.
+    grep -q '0x0400007d.*Fn+Esc = Super' "$base" ||
+        die 'Missing Fn+Esc KEY_LEFTMETA in Fn hardware layer'
+    grep -q '0x0206007c.*Sym >' "$base" ||
+        die 'Missing XKB-compatible Sym greater placeholder'
+
+
+}
+
+package() {
+    local overlays="$pkgdir/boot/overlays"
+    local docs="$pkgdir/usr/share/doc/$pkgname"
+    local name
+    install -d "$overlays" "$docs"
+    for name in $_dtbos; do
+        install -m644 "$builddir/$name.dtbo" "$overlays/$name.dtbo"
+    done
+    install -m644 "$builddir/packaging/apk/alcard-boot-zero/README.md" \
+        "$docs/README.md"
+}

@@ -1,0 +1,20 @@
+schema_version = 1
+
+[theme]
+id = "classic"
+name = "Classic"
+icon_style = "solid"
+
+[palette]
+background = "#101D30"
+surface = "#1A3048"
+selected = "#295875"
+text = "#E4EEF7"
+muted = "#ABC3D5"
+accent = "#75DCEB"
+border = "#3F607A"
+disabled = "#728A9E"
+success = "#85D59C"
+warning = "#F5C56B"
+error = "#F08B8B"
+

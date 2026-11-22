@@ -1,0 +1,26 @@
+[package]
+name = "alcard-lock"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
+publish = false
+description = "Independent ext-session-lock client with current-user PAM authentication"
+
+[workspace]
+resolver = "2"
+
+[dependencies]
+alcard-ui = { path = "../../crates/alcard-ui" }
+alcard-lock-state = { path = "../../crates/alcard-lock-state" }
+smithay-client-toolkit = { version = "=0.21.1", default-features = false, features = ["calloop", "xkbcommon"] }
+tiny-skia = { version = "=0.12.0", default-features = false, features = ["std", "simd"] }
+wayland-client = "0.31.15"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+nix = { version = "0.32.0", default-features = false, features = ["fs", "process", "resource", "signal", "user"] }
+zeroize = "1.9.2"
+zbus = { version = "6.3.0", default-features = false, features = ["default-rt", "proxy"] }
+
+[dev-dependencies]
+png = "=0.18.1"
+

@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+pkgname=alcard-desktop-minimal
+pkgver=0.1.0
+pkgrel=4
+pkgdesc="Optional GTK-free Alcard Wayland labwc, Foot and Pixman prototype"
+url="https://github.com/IncubusElster/alcard"
+arch="aarch64"
+license="GPL-3.0-or-later"
+depends="labwc foot>=1.27.0 dbus elogind eudev eudev-openrc udev-init-scripts-openrc xkeyboard-config alcard-fonts-gui=0.1.0-r0"
+options="!strip"
+source="$pkgname-$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+sha512sums=""
+
+check() {
+    sh -n "$builddir/wayland-session" || return 1
+    sh -n "$builddir/autostart" || return 1
+    test -s "$builddir/foot.ini" || return 1
+    test -s "$builddir/environment" || return 1
+}
+package() {
+    install -Dm755 "$builddir/wayland-session" "$pkgdir/usr/libexec/alcard/wayland-session"
+    install -Dm755 "$builddir/autostart" "$pkgdir/etc/xdg/labwc/autostart"
+    install -Dm644 "$builddir/environment" "$pkgdir/etc/xdg/labwc/environment"
+    install -Dm644 "$builddir/foot.ini" "$pkgdir/etc/alcard/foot.ini"
+}

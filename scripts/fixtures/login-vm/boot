@@ -1,0 +1,20 @@
+#!/bin/sh
+# A boot barrier solely for the private CI image, never installed by an APK.
+set -eu
+[ -f /etc/alcard-ci-vm ] && [ "$(id -u)" = 0 ] || exit 1
+case " $(cat /proc/cmdline) " in *' alcard_ci_vm=1 '*) ;; *) exit 1 ;; esac
+umask 077
+ulimit -c 0
+mkdir -p /run/alcard-ci
+/usr/bin/python3 /usr/libexec/alcard-ci/observer.py \
+    > /run/alcard-ci/observer.log 2>&1 &
+observer=$!
+count=0
+while [ ! -f /run/alcard-ci/setup-complete ]; do
+    kill -0 "$observer" || exit 1
+    count=$((count + 1))
+    [ "$count" -lt 600 ] || exit 1
+    sleep 1
+done
+# The unchanged tty1-dispatch, greetd, agreety and PAM own the actual login.
+exit 0

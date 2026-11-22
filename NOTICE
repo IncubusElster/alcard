@@ -1,0 +1,27 @@
+Alcard
+Copyright (C) 2026 Alcard contributors
+
+Except for the separately identified third-party material and license texts,
+the original Alcard software, build tools, configuration and documentation in
+this revision are licensed under the GNU General Public License, version 3
+or (at your option) any later version (SPDX: GPL-3.0-or-later).
+
+Alcard is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+Alcard is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Alcard in LICENSE. If not, see <https://www.gnu.org/licenses/>.
+
+The default above does not replace the licenses of the M5Stack-derived Device
+Tree and kernel material, the LCD initialization data, Bosch firmware bytes,
+UNSCII-based font data, or external dependencies. Their original notices and
+terms remain applicable. See THIRD_PARTY_NOTICES.md and licenses/.
+
+The GPL selection applies to the project revision containing this notice.
+It does not rewrite old Git commits, license grants, or previously built APKs.

@@ -1,0 +1,4 @@
+#!/bin/sh
+# The selected --session client owns the login/logout lifecycle.
+# Main Shell uses session-client; Graphics Minimal uses Foot. No detached jobs.
+exit 0

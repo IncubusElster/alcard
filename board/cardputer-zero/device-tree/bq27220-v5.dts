@@ -1,0 +1,28 @@
+/* SPDX-License-Identifier: GPL-2.0-only
+ * Alcard board overlay derived from M5Stack bq27220-1.0/bq27220_v5.dts
+ * M5Stack BSP commit 4f7aeee9fc103ebb03d22cac476bb191ecfb321e.
+ * Battery gauge TI BQ27220 on I2C1 0x55; requires matching kernel support.
+ */
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2835";
+    fragment@0 {
+        target = <&i2c1>;
+        __overlay__ {
+            #address-cells = <1>;
+            #size-cells = <0>;
+
+            battery: fuel-gauge@55 {
+                compatible = "ti,bq27220";
+                reg = <0x55>;
+                ti,resistor-sense-mohm = <10>;
+                ti,design-voltage-microvolt = <3700000>;
+                ti,design-capacity-nanoamp-hours = /bits/ 64 <1750000000>;
+                ti,use-external-ntc;
+                status = "okay";
+            };
+        };
+    };
+};

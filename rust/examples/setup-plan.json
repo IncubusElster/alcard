@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "language": "ru",
+  "account": {
+    "username": "operator",
+    "display_name": "Operator",
+    "doas_enabled": true
+  },
+  "keyboard": {
+    "layouts": ["us", "ru", "es"]
+  },
+  "session": "console"
+}

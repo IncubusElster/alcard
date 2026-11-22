@@ -1,0 +1,343 @@
+{
+  "schema": 1,
+  "source": "https://github.com/m5stack/m5stack-linux-dtoverlays/blob/4f7aeee9fc103ebb03d22cac476bb191ecfb321e/modules/tca8418-1.0/tca8418_keypad_m5stack_keymap.map",
+  "hardware": "M5Stack Cardputer Zero 46-key TCA8418",
+  "comment": "Sym scan-code 85 (KEY_ZENKAKUHANKAKU) is intentionally replaced with 124 (KEY_YEN) in Alcard DTS so its '>' symbol has a standard XKB key identifier (AE13); no printed symbol changes.",
+  "sym": [
+    {
+      "code": 26,
+      "character": "!",
+      "xkb": "AD11"
+    },
+    {
+      "code": 27,
+      "character": "@",
+      "xkb": "AD12"
+    },
+    {
+      "code": 39,
+      "character": "#",
+      "xkb": "AC10"
+    },
+    {
+      "code": 40,
+      "character": "$",
+      "xkb": "AC11"
+    },
+    {
+      "code": 41,
+      "character": "%",
+      "xkb": "TLDE"
+    },
+    {
+      "code": 43,
+      "character": "^",
+      "xkb": "BKSL"
+    },
+    {
+      "code": 51,
+      "character": "&",
+      "xkb": "AB08"
+    },
+    {
+      "code": 52,
+      "character": "*",
+      "xkb": "AB09"
+    },
+    {
+      "code": 53,
+      "character": "(",
+      "xkb": "AB10"
+    },
+    {
+      "code": 94,
+      "character": ")",
+      "xkb": "MUHE"
+    },
+    {
+      "code": 55,
+      "character": "~",
+      "xkb": "KPMU"
+    },
+    {
+      "code": 69,
+      "character": "`",
+      "xkb": "NMLK"
+    },
+    {
+      "code": 70,
+      "character": "_",
+      "xkb": "SCLK"
+    },
+    {
+      "code": 71,
+      "character": "-",
+      "xkb": "KP7"
+    },
+    {
+      "code": 72,
+      "character": "+",
+      "xkb": "KP8"
+    },
+    {
+      "code": 73,
+      "character": "=",
+      "xkb": "KP9"
+    },
+    {
+      "code": 74,
+      "character": "[",
+      "xkb": "KPSU"
+    },
+    {
+      "code": 75,
+      "character": "]",
+      "xkb": "KP4"
+    },
+    {
+      "code": 76,
+      "character": "{",
+      "xkb": "KP5"
+    },
+    {
+      "code": 77,
+      "character": "}",
+      "xkb": "KP6"
+    },
+    {
+      "code": 79,
+      "character": ";",
+      "xkb": "KP1"
+    },
+    {
+      "code": 80,
+      "character": ":",
+      "xkb": "KP2"
+    },
+    {
+      "code": 81,
+      "character": "'",
+      "xkb": "KP3"
+    },
+    {
+      "code": 82,
+      "character": "\"",
+      "xkb": "KP0"
+    },
+    {
+      "code": 83,
+      "character": "<",
+      "xkb": "KPDL"
+    },
+    {
+      "code": 124,
+      "character": ">",
+      "xkb": "AE13"
+    },
+    {
+      "code": 86,
+      "character": "\\",
+      "xkb": "LSGT"
+    },
+    {
+      "code": 89,
+      "character": "|",
+      "xkb": "AB11"
+    },
+    {
+      "code": 90,
+      "character": ",",
+      "xkb": "KATA"
+    },
+    {
+      "code": 91,
+      "character": ".",
+      "xkb": "HIRA"
+    },
+    {
+      "code": 92,
+      "character": "/",
+      "xkb": "HENK"
+    },
+    {
+      "code": 93,
+      "character": "?",
+      "xkb": "HKTG"
+    }
+  ],
+  "letters": {
+    "q": {
+      "code": 16,
+      "xkb": "AD01"
+    },
+    "w": {
+      "code": 17,
+      "xkb": "AD02"
+    },
+    "e": {
+      "code": 18,
+      "xkb": "AD03"
+    },
+    "r": {
+      "code": 19,
+      "xkb": "AD04"
+    },
+    "t": {
+      "code": 20,
+      "xkb": "AD05"
+    },
+    "y": {
+      "code": 21,
+      "xkb": "AD06"
+    },
+    "u": {
+      "code": 22,
+      "xkb": "AD07"
+    },
+    "i": {
+      "code": 23,
+      "xkb": "AD08"
+    },
+    "o": {
+      "code": 24,
+      "xkb": "AD09"
+    },
+    "p": {
+      "code": 25,
+      "xkb": "AD10"
+    },
+    "a": {
+      "code": 30,
+      "xkb": "AC01"
+    },
+    "s": {
+      "code": 31,
+      "xkb": "AC02"
+    },
+    "d": {
+      "code": 32,
+      "xkb": "AC03"
+    },
+    "f": {
+      "code": 33,
+      "xkb": "AC04"
+    },
+    "g": {
+      "code": 34,
+      "xkb": "AC05"
+    },
+    "h": {
+      "code": 35,
+      "xkb": "AC06"
+    },
+    "j": {
+      "code": 36,
+      "xkb": "AC07"
+    },
+    "k": {
+      "code": 37,
+      "xkb": "AC08"
+    },
+    "l": {
+      "code": 38,
+      "xkb": "AC09"
+    },
+    "z": {
+      "code": 44,
+      "xkb": "AB01"
+    },
+    "x": {
+      "code": 45,
+      "xkb": "AB02"
+    },
+    "c": {
+      "code": 46,
+      "xkb": "AB03"
+    },
+    "v": {
+      "code": 47,
+      "xkb": "AB04"
+    },
+    "b": {
+      "code": 48,
+      "xkb": "AB05"
+    },
+    "n": {
+      "code": 49,
+      "xkb": "AB06"
+    },
+    "m": {
+      "code": 50,
+      "xkb": "AB07"
+    }
+  },
+  "layouts": {
+    "us": {
+      "letters": {},
+      "altgr": {}
+    },
+    "ru": {
+      "letters": {
+        "q": "й",
+        "w": "ц",
+        "e": "у",
+        "r": "к",
+        "t": "е",
+        "y": "н",
+        "u": "г",
+        "i": "ш",
+        "o": "щ",
+        "p": "з",
+        "a": "ф",
+        "s": "ы",
+        "d": "в",
+        "f": "а",
+        "g": "п",
+        "h": "р",
+        "j": "о",
+        "k": "л",
+        "l": "д",
+        "z": "я",
+        "x": "ч",
+        "c": "с",
+        "v": "м",
+        "b": "и",
+        "n": "т",
+        "m": "ь"
+      },
+      "altgr": {
+        "q": "ё",
+        "j": "ж",
+        "h": "х",
+        "p": "ъ",
+        "e": "э",
+        "b": "б",
+        "u": "ю"
+      }
+    },
+    "es": {
+      "letters": {},
+      "altgr": {
+        "n": "ñ",
+        "a": "á",
+        "e": "é",
+        "i": "í",
+        "o": "ó",
+        "u": "ú",
+        "y": "ü"
+      }
+    },
+    "de": {
+      "letters": {
+        "y": "z",
+        "z": "y"
+      },
+      "altgr": {
+        "a": "ä",
+        "o": "ö",
+        "u": "ü",
+        "s": "ß"
+      }
+    }
+  }
+}

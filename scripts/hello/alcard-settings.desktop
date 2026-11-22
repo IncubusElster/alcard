@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Settings
+Name[ru]=Настройки
+Name[es]=Ajustes
+Exec=/usr/bin/alcard-settings
+Terminal=true
+Icon=preferences-system
+Categories=Settings;System;

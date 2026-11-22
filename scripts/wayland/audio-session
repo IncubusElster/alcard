@@ -1,0 +1,223 @@
+#!/bin/sh
+# Session-owned PipeWire stack. No root daemon, user-wide kill or idle polling.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+self=/usr/libexec/alcard/audio-session
+
+report() { echo "Alcard audio: $*" >&2; }
+fail() { report "$*; audio unavailable (log out and retry)"; exit 1; }
+process_stamp() {
+    [ -r "/proc/$1/stat" ] || return 0
+    IFS= read -r process_stat < "/proc/$1/stat" || return 0
+    process_stat=${process_stat##*) }
+    set -- $process_stat
+    [ "$#" -ge 20 ] && [ "$1" != Z ] || return 0
+    shift 19
+    printf '%s\n' "$1"
+}
+same_process() {
+    # Builtins only: this is also called from the idle SIGCHLD handler. A
+    # command substitution here would itself create more child notifications.
+    # ash (Alpine) and dash keep these locals separate during a nested trap.
+    local same_stamp same_stat
+    [ -n "$1" ] && [ -n "$2" ] && [ -r "/proc/$1/stat" ] || return 1
+    same_stamp=$2
+    IFS= read -r same_stat < "/proc/$1/stat" || return 1
+    same_stat=${same_stat##*) }
+    set -- $same_stat
+    [ "$#" -ge 20 ] && [ "$1" != Z ] || return 1
+    shift 19
+    [ "$1" = "$same_stamp" ]
+}
+require_parent() {
+    [ "$1" = "$PPID" ] && same_process "$1" "$2" ||
+        fail 'lost the owning session process'
+}
+signal_process() {
+    if same_process "$1" "$2"; then
+        kill "-$3" "$1" 2>/dev/null || :
+    fi
+}
+stop_child() {
+    [ -n "$child" ] || return 0
+    signal_process "$child" "$child_stamp" TERM
+    for tick in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        same_process "$child" "$child_stamp" || break
+        sleep 0.2
+    done
+    signal_process "$child" "$child_stamp" KILL
+    wait "$child" 2>/dev/null || :
+}
+
+[ "$(id -u)" -ne 0 ] || fail 'must run as the graphical login user'
+case "${1:-}" in
+    --exec|--watch)
+        [ "$#" -eq 4 ] || fail 'invalid child invocation'
+        mode=$1 owner=$2 owner_stamp=$3 role=$4
+        case "$role" in pipewire|wireplumber|pipewire-pulse) ;; *) fail 'unknown audio role' ;; esac
+        require_parent "$owner" "$owner_stamp"
+        if [ "$mode" = --exec ]; then
+            # setpriv armed PDEATHSIG before this check. An exited parent is
+            # rejected before exec, including the fork-to-prctl startup race.
+            exec "/usr/bin/$role"
+        fi
+        child= child_stamp= stopping=0 launching=1
+        trap 'stopping=1; [ "$launching" -eq 1 ] || exit 0' HUP INT TERM
+        trap 'trap "" HUP INT TERM; stop_child' EXIT
+        # Normal shutdown uses TERM and a bounded wait. If this watcher is
+        # killed outright, even a daemon ignoring TERM must not be orphaned.
+        /bin/setpriv --pdeathsig KILL "$self" --exec "$$" \
+            "$(process_stamp "$$")" "$role" &
+        child=$!
+        child_stamp=$(process_stamp "$child")
+        launching=0
+        [ "$stopping" -eq 0 ] || exit 0
+        result=0
+        wait "$child" || result=$?
+        [ "$stopping" -eq 0 ] || exit 0
+        child= child_stamp=
+        report "$role exited ($result); audio unavailable (log out and retry)"
+        signal_process "$owner" "$owner_stamp" USR1
+        exit 1
+        ;;
+esac
+
+[ "$#" -eq 2 ] || fail 'requires its owning session process'
+require_parent "$1" "$2"
+[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] || fail 'missing graphical session bus'
+[ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ] \
+    && [ ! -L "$XDG_RUNTIME_DIR" ] || fail 'invalid runtime directory'
+case "$XDG_RUNTIME_DIR" in /*) ;; *) fail 'runtime directory must be absolute' ;; esac
+[ "$(stat -c %u "$XDG_RUNTIME_DIR")" = "$(id -u)" ] \
+    && [ "$(stat -c %a "$XDG_RUNTIME_DIR")" = 700 ] || fail 'unsafe runtime directory'
+for program in /usr/bin/pipewire /usr/bin/wireplumber /usr/bin/pipewire-pulse \
+    /usr/bin/flock /bin/setpriv; do
+    [ -f "$program" ] && [ -x "$program" ] || fail "missing $program"
+done
+
+# One lifetime lock per user runtime directory. Never unlink it: another
+# session could otherwise lock a different inode while this one is still live.
+umask 077
+lock=$XDG_RUNTIME_DIR/alcard-audio.lock
+[ ! -L "$lock" ] && { [ ! -e "$lock" ] || [ -f "$lock" ]; } || fail 'unsafe audio lock'
+exec 9>>"$lock"
+[ "$(stat -c %u "$lock")" = "$(id -u)" ] \
+    && [ "$(stat -c %a "$lock")" = 600 ] || fail 'unsafe audio lock owner or mode'
+/usr/bin/flock -n 9 || fail 'another Alcard audio session owns this runtime'
+pulse_runtime=$XDG_RUNTIME_DIR/pulse
+[ ! -L "$pulse_runtime" ] || fail 'symlinked Pulse runtime directory'
+if [ -e "$pulse_runtime" ]; then
+    [ -d "$pulse_runtime" ] && [ "$(stat -c %u "$pulse_runtime")" = "$(id -u)" ] \
+        && [ "$(stat -c %a "$pulse_runtime")" = 700 ] || fail 'unsafe Pulse runtime directory'
+fi
+for endpoint in "$XDG_RUNTIME_DIR/pipewire-0" "$XDG_RUNTIME_DIR/pipewire-0-manager" \
+    "$XDG_RUNTIME_DIR/pulse/native"; do
+    [ ! -e "$endpoint" ] && [ ! -L "$endpoint" ] ||
+        fail "existing audio endpoint $endpoint; stop its owning session first"
+done
+
+# Do not follow inherited overrides to a different user's or remote server.
+unset PIPEWIRE_RUNTIME_DIR PIPEWIRE_DAEMON
+export PIPEWIRE_CORE=pipewire-0 PIPEWIRE_REMOTE=pipewire-0
+export PULSE_RUNTIME_PATH="$XDG_RUNTIME_DIR/pulse"
+export PULSE_SERVER="unix:$XDG_RUNTIME_DIR/pulse/native"
+
+audio_pid=$$
+audio_stamp=$(process_stamp "$audio_pid")
+pw= pw_stamp= wp= wp_stamp= pulse= pulse_stamp=
+launching=1 stopping=0 failed=0
+cleanup() {
+    trap '' HUP INT TERM USR1 CHLD
+    trap - EXIT
+    signal_process "$wp" "$wp_stamp" TERM
+    signal_process "$pulse" "$pulse_stamp" TERM
+    signal_process "$pw" "$pw_stamp" TERM
+    # Workers have three seconds to reap their daemon; allow four seconds
+    # before stopping an unresponsive worker. Only these exact lifetimes count.
+    for tick in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+        if ! same_process "$pw" "$pw_stamp" && ! same_process "$wp" "$wp_stamp" \
+            && ! same_process "$pulse" "$pulse_stamp"; then
+            break
+        fi
+        sleep 0.2
+    done
+    signal_process "$pw" "$pw_stamp" KILL
+    signal_process "$wp" "$wp_stamp" KILL
+    signal_process "$pulse" "$pulse_stamp" KILL
+    [ -z "$pw" ] || wait "$pw" 2>/dev/null || :
+    [ -z "$wp" ] || wait "$wp" 2>/dev/null || :
+    [ -z "$pulse" ] || wait "$pulse" 2>/dev/null || :
+}
+# Do not exit between fork and recording $!. Once startup is complete, the
+# traps also close the signal-before-blocking-wait race without idle polling.
+trap 'stopping=1; [ "$launching" -eq 1 ] || exit 0' HUP INT TERM
+trap 'failed=1; [ "$launching" -eq 1 ] || exit 1' USR1
+trap cleanup EXIT
+
+socket_owned_by() {
+    # A competing server may win a bind after our preflight. A pathname alone
+    # is insufficient: require the listening socket to be held by our daemon.
+    [ -S "$2" ] || return 1
+    socket_inode=$(
+        while read -r num refs protocol flags type state inode path; do
+            if [ "$path" = "$2" ] && [ "$flags" = 00010000 ]; then
+                printf '%s\n' "$inode"
+            fi
+        done < /proc/net/unix
+    )
+    case "$socket_inode" in ''|*[!0-9]*) return 1 ;; esac
+    for descriptor in "/proc/$1/fd/"*; do
+        if [ "$(readlink "$descriptor" 2>/dev/null || :)" = "socket:[$socket_inode]" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Closing descriptor 9 in every child leaves the lock owned by this helper.
+/bin/setpriv --pdeathsig KILL "$self" --exec "$audio_pid" "$audio_stamp" pipewire 9>&- &
+pw=$!
+pw_stamp=$(process_stamp "$pw")
+[ "$stopping" -eq 0 ] || exit 0
+ready=0 tick=0
+while [ "$tick" -lt 60 ]; do
+    [ "$stopping" -eq 0 ] || exit 0
+    same_process "$pw" "$pw_stamp" || fail 'PipeWire exited during startup'
+    if socket_owned_by "$pw" "$XDG_RUNTIME_DIR/pipewire-0"; then
+        ready=1
+        break
+    fi
+    sleep 0.1
+    tick=$((tick + 1))
+done
+[ "$ready" -eq 1 ] || fail 'PipeWire socket startup timed out'
+
+/bin/setpriv --pdeathsig TERM "$self" --watch "$audio_pid" "$audio_stamp" wireplumber 9>&- &
+wp=$!
+wp_stamp=$(process_stamp "$wp")
+[ "$stopping" -eq 0 ] || exit 0
+[ "$failed" -eq 0 ] || exit 1
+[ -n "$wp_stamp" ] || fail 'WirePlumber watcher exited during startup'
+/bin/setpriv --pdeathsig TERM "$self" --watch "$audio_pid" "$audio_stamp" pipewire-pulse 9>&- &
+pulse=$!
+pulse_stamp=$(process_stamp "$pulse")
+launching=0
+[ "$stopping" -eq 0 ] || exit 0
+[ "$failed" -eq 0 ] || exit 1
+[ -n "$pulse_stamp" ] || fail 'Pulse watcher exited during startup'
+check_workers() {
+    if ! same_process "$pw" "$pw_stamp" || ! same_process "$wp" "$wp_stamp" \
+        || ! same_process "$pulse" "$pulse_stamp"; then
+        fail 'an owned audio process exited'
+    fi
+}
+# Daemon failures normally arrive through USR1. CHLD also catches a killed
+# watcher, and the immediate check covers children that exited before arming
+# the trap. From here no subprocess is spawned until cleanup: wait blocks.
+trap check_workers CHLD
+check_workers
+result=0
+wait "$pw" || result=$?
+report "PipeWire exited ($result); audio unavailable (log out and retry)"
+exit 1

@@ -1,0 +1,11 @@
+[package]
+name = "alcard-lock-state"
+description = "Advisory compositor-scoped lock recovery journal; never an unlock authority"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+libc = "0.2.191"

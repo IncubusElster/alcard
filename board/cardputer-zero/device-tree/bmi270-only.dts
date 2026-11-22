@@ -1,0 +1,25 @@
+/* SPDX-License-Identifier: GPL-2.0-only
+ * Alcard alternative IMU overlay for boards with BMI270 but no BMM150.
+ * Derived from M5Stack imu-1.0/bmi270_overlay.dts
+ * M5Stack BSP commit 4f7aeee9fc103ebb03d22cac476bb191ecfb321e.
+ * Never enable this and bmi270-bmm150 simultaneously.
+ */
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2835";
+    fragment@0 {
+        target = <&i2c1>;
+        __overlay__ {
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "okay";
+            bmi270: imu@68 {
+                compatible = "bosch,bmi270";
+                reg = <0x68>;
+                status = "okay";
+            };
+        };
+    };
+};

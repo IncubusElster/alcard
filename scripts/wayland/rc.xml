@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Installed Alcard Shell session profile; requires labwc >= 0.8.4.
+     Alpine 3.24's labwc recipe provides 0.20.0-r0.
+     Owned by alcard-desktop-shell; the Foot fallback keeps its own profile.
+     Fn+ESC emits Super_L. Only its lone release invokes Home, leaving
+     combinations and application-local softkeys unchanged.
+     HideCursor runs on Shell's first map and on Home; pointer activity
+     shows the cursor again. No idle timer or lock-surface policy here. -->
+<labwc_config>
+  <focus>
+    <followMouse>no</followMouse>
+  </focus>
+  <keyboard>
+    <default />
+    <!-- Keep labwc's default allowWhenLocked=no: no Home during session lock. -->
+    <keybind key="Super_L" onRelease="yes">
+      <action name="HideCursor" />
+      <action name="Execute" command="alcard-shell --home" />
+    </keybind>
+  </keyboard>
+  <windowRules>
+    <!-- Shell initially creates a windowed toplevel. Apply fullscreen once;
+         this also works on the oldest supported labwc (before SetFullscreen). -->
+    <windowRule identifier="alcard-shell" serverDecoration="no" event="onFirstMap">
+      <action name="ToggleFullscreen" />
+      <action name="HideCursor" />
+    </windowRule>
+  </windowRules>
+</labwc_config>
+

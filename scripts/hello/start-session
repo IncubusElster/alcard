@@ -1,0 +1,27 @@
+#!/bin/sh
+# Fixed login targets selected by Hello. The existing labwc name deliberately
+# retains the diagnostic Foot session; the main Shell has a distinct name.
+set -eu
+[ ! -r /etc/profile.d/alcard-locale.sh ] || . /etc/profile.d/alcard-locale.sh
+session=console
+if [ -f /etc/alcard/default-session ]; then
+    IFS= read -r session < /etc/alcard/default-session || :
+fi
+case "$session" in
+    alcard-shell)
+        [ -x /usr/libexec/alcard/shell-session ] || exit 1
+        exec /usr/libexec/alcard/shell-session
+        ;;
+    console)
+        exec "${SHELL:-/bin/ash}" -l
+        ;;
+    labwc)
+        # Graphics Minimal remains available independently of Shell.
+        [ -x /usr/libexec/alcard/wayland-session ] || exit 1
+        exec /usr/libexec/alcard/wayland-session
+        ;;
+    *)
+        # Fail closed on unknown or malformed session selection.
+        exit 1
+        ;;
+esac

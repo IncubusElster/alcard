@@ -1,0 +1,25 @@
+#!/bin/sh
+# Firstboot runs only on local tty1. Bootstrap account policy verified in setupd.
+set -eu
+tty="${1:-tty1}"
+case "$tty" in tty1|ttyAMA0) ;; *) exit 2 ;; esac
+if ! /usr/sbin/alcard-setupd --arm-firstboot; then
+    echo 'Alcard firstboot refused; review /etc/passwd and /etc/shadow' >&2
+    exit 1
+fi
+# Ensure username and password are entered against US keyboard, regardless
+# of future layout preferences. Do not alter the layout selection stored in Hello.
+keymap=/usr/share/alcard/keyboard/console/us.bmap.gz
+[ -r "$keymap" ] || { echo "Missing Cardputer US keymap" >&2; exit 1; }
+if [ "$tty" = tty1 ]; then
+    gzip -dc "$keymap" | loadkmap
+fi
+while /usr/sbin/alcard-setupd --needs-hello; do
+    /usr/bin/alcard-settings --hello || :
+    if ! /usr/sbin/alcard-setupd --needs-hello; then break; fi
+    echo 'Firstboot not completed. Retry or power off.' >&2
+    sleep 2
+done
+# Re-check the completed marker and use the same single-owner login path.
+# tty1 -> greetd/agreety; ttyAMA0 -> getty (QEMU serial).
+exec /usr/libexec/alcard/tty1-dispatch "$tty"

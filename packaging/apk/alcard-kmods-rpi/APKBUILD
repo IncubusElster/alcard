@@ -1,0 +1,167 @@
+# Contributor: Alcard contributors
+# Cardputer Zero v5 BSP / Alpine linux-rpi (aarch64).
+# Only ship out-of-tree modules missing from the matching kernel. Never shadow
+# in-tree bq27xxx, BMI270 or BMC150 modules with another provider.
+pkgname=alcard-kmods-rpi
+pkgver=6.18.60
+pkgrel=3
+_kernrel=0
+_m5rev=4f7aeee9fc103ebb03d22cac476bb191ecfb321e
+_kernelabi="${pkgver}-${_kernrel}-rpi"
+pkgdesc="M5Stack Cardputer Zero out-of-tree modules for Alpine linux-rpi"
+url="https://github.com/m5stack/m5stack-linux-dtoverlays"
+arch="aarch64"
+license="GPL-2.0-only"
+options="!check !strip"
+depends="linux-rpi=${pkgver}-r${_kernrel} kmod"
+makedepends="linux-rpi-dev=${pkgver}-r${_kernrel} make gcc kmod"
+source="m5stack-linux-dtoverlays-${_m5rev}.tar.gz
+    0001-bmi270-aux-address-property.patch
+    "
+builddir="$srcdir/m5stack-linux-dtoverlays-${_m5rev}"
+# `abuild checksum` fills this in a .alcard-local/ working copy only.
+sha512sums=""
+
+# Apply board-specific BMM150 AUX binding fix to pinned M5Stack snapshot.
+prepare() {
+    default_prepare
+}
+
+# Only used with a pinned source tree and the *actual* Alpine linux-rpi-dev
+# .config/Module.symvers; upstream defconfig is NOT an ABI guarantee.
+_kernel_has() {
+    grep -Eq "^${1}=(y|m)$" "$_config"
+}
+
+_add_module() {
+    case " $_modules " in
+        *" $1 "*) die "Duplicate selected kernel module: $1" ;;
+    esac
+    _modules="${_modules:+$_modules }$1"
+}
+
+_copy_module_source() {
+    local from="$1" name="$2"
+    [ -r "$builddir/modules/$from/$name.c" ] || die "Missing M5Stack source: $from/$name.c"
+    cp "$builddir/modules/$from/$name.c" "$_kbuild/$name.c"
+    _add_module "$name"
+}
+
+build() {
+    local _headers="/usr/src/linux-headers-${_kernelabi}"
+    local _kbuild="$builddir/.alcard-kbuild"
+    local _config="$_headers/.config"
+    local _modules= _module= _found= _s=
+    local _decision="$builddir/.alcard-kbuild/selection.txt"
+
+    [ -r "$_config" ] || die "Missing matching kernel config: $_config"
+    [ -s "$_headers/Module.symvers" ] || die "Missing kernel symbols: $_headers/Module.symvers"
+    [ "$(cat /usr/share/kernel/rpi/kernel.release 2>/dev/null)" = "$_kernelabi" ] ||
+        die "Installed linux-rpi does not match requested ABI $_kernelabi"
+
+    # A source-level driver may exist but not be configured in linux-rpi.
+    # These kernel interfaces are required by our out-of-tree modules.
+    for _s in CONFIG_MODULES CONFIG_I2C CONFIG_GPIOLIB CONFIG_REGMAP CONFIG_SND CONFIG_SND_SOC CONFIG_IIO; do
+        _kernel_has "$_s" || die "Target kernel missing $_s; change linux-rpi config, not vendor .ko"
+    done
+
+    mkdir -p "$_kbuild"
+    : > "$_decision"
+
+    # Mandatory M5Stack board-specific drivers. Standard upstream drivers
+    # cannot replicate the Fn/Sym FSM, M5IOE1 or Cardputer audio routing.
+    _copy_module_source m5ioe1-1.0 m5ioe1
+    _copy_module_source CardputerZero gpio-forwarder
+    _copy_module_source tca8418-1.0 tca8418_keypad_m5stack
+    cp "$builddir/modules/tca8418-1.0/tca8418_fsm.c" "$_kbuild/"
+    _copy_module_source st7789v-1.0 pwm_bl_m5stack
+    _copy_module_source es8389-1.0 es8389_m5stack
+    cp "$builddir/modules/es8389-1.0/es8389.h" "$_kbuild/"
+    _copy_module_source CardputerZero cardputerzero-audio
+    printf '%s\n' 'Core: M5Stack m5ioe1, gpio-forwarder, TCA8418, PWM, ES8390 codec and ASoC routing' >> "$_decision"
+
+    # Standard Linux provides the simple-audio-amplifier compatible when
+    # CONFIG_SND_SOC_SIMPLE_AMPLIFIER is enabled. Never install both.
+    if _kernel_has CONFIG_SND_SOC_SIMPLE_AMPLIFIER; then
+        printf '%s\n' 'Amplifier: linux-rpi snd-soc-simple-amplifier' >> "$_decision"
+    else
+        _copy_module_source es8389-1.0 simple-amplifier
+        printf '%s\n' 'Amplifier: M5Stack simple-amplifier fallback' >> "$_decision"
+    fi
+
+    # M5Stack is necessary for the BQ27220 OF match and chip-specific data:
+    # generic upstream bq27xxx has no `ti,bq27220`.  Its core/i2c drivers
+    # reuse *the same* module names and exported symbols as the stock kernel.
+    # Do not build a second set if a stock BQ driver is enabled. This is a
+    # HARD integration blocker requiring a kernel patch/replacement, not a
+    # reason to publish an incomplete supposedly-supported battery driver.
+    if _kernel_has CONFIG_BATTERY_BQ27XXX || _kernel_has CONFIG_BATTERY_BQ27XXX_I2C; then
+        die 'BQ27220 conflict: linux-rpi has generic bq27xxx enabled but lacks ti,bq27220. Integrate M5Stack support into linux-rpi or disable generic bq27xxx in a coordinated kernel build. No duplicate vendor modules.'
+    fi
+    _copy_module_source bq27220-1.0 bq27xxx_battery
+    _copy_module_source bq27220-1.0 bq27xxx_battery_i2c
+    cp "$builddir/modules/bq27220-1.0/bq27xxx_battery.h" "$_kbuild/"
+    printf '%s\n' 'Battery: M5Stack BQ27220 core + I2C, stock BQ drivers disabled' >> "$_decision"
+
+    # The standard BMC150 I2C driver cannot talk to a BMM150 behind the BMI270
+    # AUX bus. M5Stack's bmc150_magn_bmi270 is needed regardless of whether
+    # the core/I2C BMI270 and BMC150 implementations come from the kernel.
+    # Source/ABI compatibility will be validated by kernel MODPOST.
+    if _kernel_has CONFIG_BMI270; then
+        _kernel_has CONFIG_BMI270_I2C ||
+            die 'Kernel BMI270 core is enabled but BMI270_I2C is disabled: enable the matching kernel driver'
+        printf '%s\n' 'BMI270: linux-rpi core + I2C' >> "$_decision"
+    else
+        _kernel_has CONFIG_BMI270_I2C &&
+            die 'Kernel BMI270_I2C enabled without the core: inconsistent Kconfig'
+        _copy_module_source imu-1.0/bmi270 bmi270_core
+        _copy_module_source imu-1.0/bmi270 bmi270_i2c
+        cp "$builddir/modules/imu-1.0/bmi270/bmi270.h" "$_kbuild/"
+        printf '%s\n' 'BMI270: M5Stack core + I2C; firmware packaged separately' >> "$_decision"
+    fi
+
+    if _kernel_has CONFIG_BMC150_MAGN; then
+        for _s in bmc150_magn_probe bmc150_magn_remove bmc150_magn_pm_ops bmc150_magn_regmap_config; do
+            grep -Eq "[[:space:]]${_s}[[:space:]]" "$_headers/Module.symvers" ||
+                die "Kernel BMC150 lacks exported $_s; cannot link AUX bridge without a coherent kernel/vendor fix"
+        done
+        printf '%s\n' 'BMC150 core: linux-rpi exports' >> "$_decision"
+    else
+        _copy_module_source imu-1.0/magnetometer bmc150_magn
+        printf '%s\n' 'BMC150 core: M5Stack (stock disabled)' >> "$_decision"
+    fi
+    _copy_module_source imu-1.0/magnetometer bmc150_magn_bmi270
+    cp "$builddir/modules/imu-1.0/magnetometer/bmc150_magn.h" "$_kbuild/"
+    printf '%s\n' 'BMM150: M5Stack AUX bridge via BMI270; no standalone SoC I2C BMM150' >> "$_decision"
+
+    # Deliberately NOT included: LCD FBTFT/alternate DRM, GPIO powerfail
+    # (unsafe until device review), optional accessory or unrelated drivers.
+    printf '%s\n' 'Excluded: vendor FBTFT/panel override, powerfail_suo, IMX219, RTC, IR, USB, Wi-Fi/BT, unrelated CAP drivers' >> "$_decision"
+
+    : > "$_kbuild/Makefile"
+    for _module in $_modules; do
+        printf 'obj-m += %s.o\n' "$_module" >> "$_kbuild/Makefile"
+    done
+
+    make -C "$_headers" M="$_kbuild" ARCH=arm64 modules
+
+    for _module in $_modules; do
+        [ -f "$_kbuild/$_module.ko" ] || die "Module not built: $_module"
+        _found="$(modinfo -F vermagic "$_kbuild/$_module.ko" | cut -d ' ' -f1)"
+        [ "$_found" = "$_kernelabi" ] || die "$_module has wrong kernel ABI: $_found"
+    done
+    printf '%s\n' $_modules > "$_kbuild/modules.list"
+}
+
+package() {
+    local _kbuild="$builddir/.alcard-kbuild"
+    local _target="$pkgdir/usr/lib/modules/$_kernelabi/extra/alcard"
+    local _name=
+    [ -s "$_kbuild/modules.list" ] || die 'Missing selected modules'
+    install -d "$_target" "$pkgdir/usr/share/alcard"
+    while IFS= read -r _name; do
+        [ -n "$_name" ] || continue
+        install -m644 "$_kbuild/$_name.ko" "$_target/$_name.ko"
+    done < "$_kbuild/modules.list"
+    install -m644 "$_kbuild/selection.txt" "$pkgdir/usr/share/alcard/kmods-rpi-selection.txt"
+}

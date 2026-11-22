@@ -1,0 +1,57 @@
+#!/bin/sh
+# One console owner: firstboot first, greetd/agreety on tty1, getty on serial.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+greetd_log_parent=/run
+greetd_log_owner=0:0
+greetd_log_dir=$greetd_log_parent/alcard-greetd
+greetd_log_file=$greetd_log_dir/daemon.log
+
+prepare_greetd_log() (
+    # Keep the caller's umask for greetd and all later user sessions. Only the
+    # volatile daemon log uses this private creation mask.
+    umask 077
+    [ "$(id -u)" = "${greetd_log_owner%%:*}" ] || exit 1
+    [ ! -L "$greetd_log_parent" ] && [ -d "$greetd_log_parent" ] &&
+        [ "$(stat -c %u:%g:%a "$greetd_log_parent")" = "$greetd_log_owner:755" ] || exit 1
+    if [ ! -e "$greetd_log_dir" ] && [ ! -L "$greetd_log_dir" ]; then
+        mkdir -m 700 "$greetd_log_dir" || exit 1
+    fi
+    [ ! -L "$greetd_log_dir" ] && [ -d "$greetd_log_dir" ] &&
+        [ "$(stat -c %u:%g:%a "$greetd_log_dir")" = "$greetd_log_owner:700" ] || exit 1
+    if [ ! -e "$greetd_log_file" ] && [ ! -L "$greetd_log_file" ]; then
+        set -C
+        : > "$greetd_log_file" || exit 1
+    fi
+    [ ! -L "$greetd_log_file" ] && [ -f "$greetd_log_file" ] &&
+        [ "$(stat -c %u:%g:%a:%h "$greetd_log_file")" = "$greetd_log_owner:600:1" ] || exit 1
+)
+
+tty="${1:-tty1}"
+case "$tty" in tty1|ttyAMA0) ;; *) echo "Unsupported console" >&2; exit 2 ;; esac
+if [ "$tty" = tty1 ] && command -v setfont >/dev/null 2>&1; then
+    setfont /usr/share/kbd/consolefonts/AlcardPixel-Regular-core-8x8.psf >/dev/null 2>&1 || :
+fi
+if /usr/sbin/alcard-setupd --needs-hello; then
+    exec /usr/libexec/alcard/firstboot-init "$tty"
+fi
+# Greetd controls Linux virtual terminals and can launch console or a future
+# Wayland DE. It cannot be assumed to support QEMU's serial ttyAMA0.
+if [ "$tty" = tty1 ] && [ -r /etc/greetd/alcard.toml ]; then
+    for daemon in /usr/sbin/greetd /usr/bin/greetd; do
+        if [ -x "$daemon" ]; then
+            prepare_greetd_log || {
+                echo 'Alcard greetd runtime log path is unsafe or unavailable' >&2
+                exit 1
+            }
+            # greetd's successful worker reconnects all three descriptors to
+            # its VT. Keep only daemon/early failed-PAM stderr off agreety's
+            # prompt. A new daemon truncates this root-private volatile log;
+            # it is not a byte cap for a long-running daemon. Preserve exec PID.
+            exec "$daemon" --config /etc/greetd/alcard.toml 2> "$greetd_log_file"
+        fi
+    done
+fi
+case "$tty" in ttyAMA0) baud=115200 ;; *) baud=38400 ;; esac
+exec /sbin/getty "$baud" "$tty"

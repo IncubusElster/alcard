@@ -1,0 +1,19 @@
+[package]
+name = "alcard-settings"
+description = "Alcard Settings and Hello with explicit QEMU firstboot mode"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+alcard-settings-core = { path = "../../crates/alcard-settings-core", features = ["pairing"] }
+alcard-input = { path = "../../crates/alcard-input" }
+alcard-l10n = { path = "../../crates/alcard-l10n" }
+alcard-setup-core = { path = "../../crates/alcard-setup-core" }
+alcard-setup-protocol = { path = "../../crates/alcard-setup-protocol" }
+ratatui = { version = "=0.30.2", default-features = false, features = ["crossterm"] }
+crossterm = "=0.29.0"
+unicode-width = "0.2.3"
+libc = "0.2.191"
+zeroize = "1.9.2"

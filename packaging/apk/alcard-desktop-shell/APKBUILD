@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+pkgname=alcard-desktop-shell
+pkgver=0.1.0
+pkgrel=11
+pkgdesc="Alcard Shell login session with polkit, locker and Foot fallback"
+url="https://github.com/IncubusElster/alcard"
+arch="aarch64"
+license="GPL-3.0-or-later"
+depends="alcard-shell=0.1.0-r9 alcard-polkit-agent=0.1.0-r6 alcard-lock=0.1.0-r5 alcard-desktop-minimal=0.1.0-r4 greetd greetd-agreety labwc>=0.8.4 setpriv flock pipewire wireplumber pipewire-pulse pipewire-alsa"
+options="!strip"
+source="$pkgname-$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+sha512sums=""
+
+check() {
+    sh -n "$builddir/shell-session" || return 1
+    sh -n "$builddir/session-client" || return 1
+    sh -n "$builddir/audio-session" || return 1
+    sh -n "$builddir/autostart" || return 1
+    test -s "$builddir/rc.xml" || return 1
+    test -s "$builddir/environment"
+}
+
+package() {
+    install -Dm755 "$builddir/shell-session" "$pkgdir/usr/libexec/alcard/shell-session"
+    install -Dm755 "$builddir/session-client" "$pkgdir/usr/libexec/alcard/session-client"
+    install -Dm755 "$builddir/audio-session" "$pkgdir/usr/libexec/alcard/audio-session"
+    install -Dm644 "$builddir/rc.xml" "$pkgdir/etc/alcard/labwc-shell/rc.xml"
+    install -Dm644 "$builddir/environment" "$pkgdir/etc/alcard/labwc-shell/environment"
+    install -Dm755 "$builddir/autostart" "$pkgdir/etc/alcard/labwc-shell/autostart"
+}

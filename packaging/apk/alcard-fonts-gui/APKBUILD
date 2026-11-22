@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: CC0-1.0
+pkgname=alcard-fonts-gui
+pkgver=0.1.0
+pkgrel=0
+pkgdesc="Alcard Pixel Regular and Bold 8x8 TTF for Wayland/fontconfig"
+url="https://github.com/IncubusElster/alcard"
+arch="aarch64"
+license="CC0-1.0"
+depends="fontconfig"
+makedepends="python3 py3-fonttools"
+options="!strip"
+source="$pkgname-$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+sha512sums=""
+
+build() {
+    python3 "$builddir/tools/build-alcard-fonts.py" \
+        --regular "$builddir/fonts/AlcardPixel-Regular.hex" \
+        --bold "$builddir/fonts/AlcardPixel-Bold.hex" \
+        --output "$builddir/generated" --ttf
+}
+
+check() {
+    python3 - "$builddir/generated" <<'PY'
+from pathlib import Path
+from fontTools.ttLib import TTFont
+import sys
+root = Path(sys.argv[1])
+for weight in ("Regular", "Bold"):
+    path = root / f"AlcardPixel-{weight}.ttf"
+    if not path.is_file():
+        raise SystemExit(f"missing {path}")
+    font = TTFont(path)
+    cmap = font.getBestCmap()
+    required = [ord(c) for c in "AZaz09ЁёñÑ¿¡"]
+    if any(cp not in cmap for cp in required):
+        raise SystemExit(f"missing EN/RU/ES glyph in {path}")
+    if font["head"].unitsPerEm != 1024 or len(cmap) < 3000:
+        raise SystemExit(f"bad TTF metrics/coverage: {path}")
+    if any(font["hmtx"][name][0] != 1024 for name in font.getGlyphOrder()):
+        raise SystemExit(f"nonmonospace glyph width: {path}")
+PY
+}
+
+package() {
+    install -d "$pkgdir/usr/share/fonts/alcard"
+    install -m644 "$builddir"/generated/*.ttf "$pkgdir/usr/share/fonts/alcard/"
+}

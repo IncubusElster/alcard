@@ -1,0 +1,7 @@
+[package]
+name = "alcard-input"
+description = "Terminal- and gamepad-neutral actions for Alcard softkeys"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+version.workspace = true

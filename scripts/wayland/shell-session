@@ -1,0 +1,57 @@
+#!/bin/sh
+# Main Alcard graphical login target. greetd/PAM owns authentication and the VT.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+fail() { echo "Alcard session: $*" >&2; exit 1; }
+[ "$#" -eq 0 ] || fail "this login target takes no arguments"
+[ "$(id -u)" -ne 0 ] || fail "the desktop must run as its login user"
+for program in /usr/bin/labwc /usr/bin/dbus-run-session /bin/setpriv \
+    /usr/bin/alcard-shell /usr/bin/alcard-polkit-agent /usr/bin/alcard-lock \
+    /usr/libexec/alcard/session-client /usr/libexec/alcard/audio-session; do
+    [ -f "$program" ] && [ -x "$program" ] || fail "missing $program"
+done
+for config in /etc/alcard/labwc-shell/rc.xml /etc/pam.d/alcard-lock; do
+    [ -f "$config" ] && [ -r "$config" ] || fail "missing $config"
+done
+
+# PAM/elogind supplies the runtime directory. Do not invent a fallback in /tmp.
+[ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ] \
+    && [ ! -L "$XDG_RUNTIME_DIR" ] || fail "missing or invalid XDG_RUNTIME_DIR"
+case "$XDG_RUNTIME_DIR" in /*) ;; *) fail "XDG_RUNTIME_DIR must be absolute" ;; esac
+[ "$(stat -c %u "$XDG_RUNTIME_DIR")" = "$(id -u)" ] ||
+    fail "XDG_RUNTIME_DIR belongs to another user"
+[ "$(stat -c %a "$XDG_RUNTIME_DIR")" = 700 ] ||
+    fail "XDG_RUNTIME_DIR must have mode 0700"
+
+# These assignments come only from the root-owned, enum-validated Hello output.
+keyboard_env=/etc/alcard/keyboard-xkb.env
+if [ -f "$keyboard_env" ]; then
+    [ ! -L "$keyboard_env" ] && [ "$(stat -c %u "$keyboard_env")" = 0 ] \
+        && [ "$(stat -c %a "$keyboard_env")" = 644 ] ||
+        fail "invalid keyboard configuration ownership or permissions"
+    # shellcheck disable=SC1091
+    . "$keyboard_env"
+fi
+
+export XDG_SESSION_TYPE=wayland
+export XDG_SESSION_DESKTOP=alcard-shell
+export XDG_CURRENT_DESKTOP=Alcard:labwc
+export WLR_RENDERER=pixman
+export LIBSEAT_BACKEND=logind
+export ALCARD_FOOT_CONFIG=/etc/alcard/foot.ini
+# Native, Pulse and ALSA-through-PipeWire clients use this login's default
+# server. The session client starts it after the compositor is ready.
+unset PIPEWIRE_RUNTIME_DIR PIPEWIRE_DAEMON
+export PIPEWIRE_CORE=pipewire-0 PIPEWIRE_REMOTE=pipewire-0
+export PULSE_RUNTIME_PATH="$XDG_RUNTIME_DIR/pulse"
+export PULSE_SERVER="unix:$XDG_RUNTIME_DIR/pulse/native"
+# Each graphical login owns one bus and one compositor. Its --session child
+# starts only after the Wayland socket is ready. labwc ends when that child
+# exits, but does not stop it on compositor exit: bind the reverse lifetime
+# with the kernel's parent-death signal. session-client also checks LABWC_PID
+# against its parent before spawning anything, closing the startup race.
+exec /usr/bin/dbus-run-session -- /usr/bin/labwc \
+    --config-dir /etc/alcard/labwc-shell \
+    --session '/bin/setpriv --pdeathsig TERM /usr/libexec/alcard/session-client'

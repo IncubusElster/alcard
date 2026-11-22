@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+pkgname=alcard-shell
+pkgver=0.1.0
+pkgrel=9
+pkgdesc="Alcard compact Wayland application shell"
+url="https://github.com/IncubusElster/alcard"
+arch="aarch64"
+license="GPL-3.0-or-later"
+depends="alcard-hello>=0.1.0-r6 libxkbcommon wireplumber pipewire-tools networkmanager-cli bluez dbus>=1.16.2 polkit-elogind"
+options="!strip"
+source="$pkgname-$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+sha512sums=""
+
+check() {
+    test -x "$builddir/alcard-shell" || return 1
+    test -x "$builddir/alcard-radio-helper" || return 1
+    test -s "$builddir/org.alcard.radio.policy" || return 1
+}
+
+package() {
+    install -Dm755 "$builddir/alcard-shell" "$pkgdir/usr/bin/alcard-shell"
+    install -Dm755 "$builddir/alcard-radio-helper" "$pkgdir/usr/libexec/alcard/alcard-radio-helper"
+    install -Dm644 "$builddir/org.alcard.radio.policy" "$pkgdir/usr/share/polkit-1/actions/org.alcard.radio.policy"
+}

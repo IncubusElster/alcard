@@ -1,0 +1,31 @@
+[package]
+name = "alcard-shell"
+default-run = "alcard-shell"
+description = "Compact SCTK/tiny-skia Wayland session Shell"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
+publish = false
+
+# Independently locked graphical application; the console workspace stays GUI-free.
+[workspace]
+resolver = "2"
+
+[dependencies]
+alcard-settings-core = { path = "../../crates/alcard-settings-core" }
+smithay-client-toolkit = { version = "=0.21.1", default-features = false, features = ["calloop", "xkbcommon"] }
+tiny-skia = { version = "=0.12.0", default-features = false, features = ["std", "simd"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+alcard-ui = { path = "../../crates/alcard-ui" }
+alcard-lock-state = { path = "../../crates/alcard-lock-state" }
+futures-lite = "2.6.1"
+wayland-client = "0.31.15"
+wayland-protocols-wlr = { version = "0.3.12", features = ["client"] }
+nix = { version = "0.32.0", default-features = false, features = ["socket", "user", "net"] }
+zbus = { version = "6.3.0", default-features = false, features = ["default-rt", "proxy", "service"] }
+zruntime = { version = "0.2.3", default-features = false, features = ["runtime", "helper"] }
+png = "=0.18.1"
+calloop = { version = "0.14.5", features = ["signals"] }
+serde_json = "1.0.154"
+

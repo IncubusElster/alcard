@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+pkgname=alcard-lock
+pkgver=0.1.0
+pkgrel=5
+pkgdesc="Alcard compositor session locker with current-user PAM authentication"
+url="https://github.com/IncubusElster/alcard"
+arch="aarch64"
+license="GPL-3.0-or-later"
+# linux-pam includes the distribution base-auth/base-account stacks and helper.
+depends="linux-pam libxkbcommon"
+options="!strip"
+source="$pkgname-$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+sha512sums=""
+
+check() {
+    test -x "$builddir/alcard-lock" || return 1
+    test -s "$builddir/alcard-lock.pamd"
+}
+
+package() {
+    # Shell deliberately resolves the locker beside its own executable.
+    install -Dm755 "$builddir/alcard-lock" "$pkgdir/usr/bin/alcard-lock"
+    install -Dm644 "$builddir/alcard-lock.pamd" "$pkgdir/etc/pam.d/alcard-lock"
+}

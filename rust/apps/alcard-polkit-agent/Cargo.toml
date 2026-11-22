@@ -1,0 +1,24 @@
+[package]
+name = "alcard-polkit-agent"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
+publish = false
+description = "Independent SCTK/tiny-skia graphical polkit and native PAM agent"
+[workspace]
+resolver = "2"
+[dependencies]
+alcard-ui = { path = "../../crates/alcard-ui" }
+smithay-client-toolkit = { version = "=0.21.1", default-features = false, features = ["calloop", "xkbcommon"] }
+tiny-skia = { version = "=0.12.0", default-features = false, features = ["std", "simd"] }
+wayland-client = "0.31.15"
+signal-hook = "0.4.6"
+glib = "0.22.11"
+gio = "0.22.11"
+async-channel = "2.5.0"
+nix = { version = "0.32.0", default-features = false, features = ["process", "user", "resource", "signal"] }
+zeroize = "1.9.2"
+
+[build-dependencies]
+pkg-config = "0.3.34"

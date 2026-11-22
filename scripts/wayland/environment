@@ -1,0 +1,4 @@
+# Minimal labwc environment for 320x170 software rendering.
+WLR_RENDERER=pixman
+WLR_XWAYLAND=
+XCURSOR_SIZE=16

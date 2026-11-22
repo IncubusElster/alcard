@@ -1,0 +1,6 @@
+# Alpine's vendor service has Exec=/bin/false (systemd-only activation).
+# D-Bus >= 1.16.2 gives /etc/dbus-1/system-services precedence on OpenRC as well.
+[D-BUS Service]
+Name=org.bluez
+Exec=/usr/lib/bluetooth/bluetoothd --nodetach --configfile=/etc/alcard/bluetooth.conf
+User=root

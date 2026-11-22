@@ -1,0 +1,155 @@
+#!/bin/sh
+# labwc's main session client. Own Shell, polkit and the optional audio stack.
+# The independent session locker is never killed merely because Shell exits.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+# labwc starts us through setpriv --pdeathsig TERM. If it exited before that
+# prctl was armed, reject the reparented process before spawning any services.
+[ -n "${LABWC_PID:-}" ] && [ "$LABWC_PID" = "$PPID" ] || {
+    echo 'Alcard session client requires its live compositor parent' >&2
+    exit 1
+}
+[ "$#" -eq 0 ] && [ "$(id -u)" -ne 0 ] || exit 1
+[ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] || {
+    echo 'Alcard session client requires its compositor and session bus' >&2
+    exit 1
+}
+
+# /proc is part of the Linux session contract. Bind any delayed shutdown
+# signal to this exact process lifetime, not a later reuse of its PID.
+# Every call uses command substitution, isolating these temporary variables.
+process_stamp() {
+    [ -r "/proc/$1/stat" ] || return 0
+    IFS= read -r process_stat < "/proc/$1/stat" || return 0
+    process_stat=${process_stat##*) }
+    # Fields after the final ')' contain only kernel-generated words.
+    set -- $process_stat
+    [ "$#" -ge 20 ] && [ "$1" != Z ] || return 0
+    shift 19
+    printf '%s\n' "$1"
+}
+
+session_client_pid=$$
+session_client_stamp=$(process_stamp "$session_client_pid")
+[ -n "$session_client_stamp" ] || exit 1
+
+# A blocking wait costs no periodic wakeups. Backoff applies only after a child
+# has exited, and prevents unavailable polkit or a crashing Shell from spinning.
+supervise() {
+    child=
+    child_stamp=
+    stopping=0
+    launching=0
+    delay=1
+    same_child() {
+        [ -n "$child" ] && [ -n "$child_stamp" ] &&
+            [ "$(process_stamp "$child")" = "$child_stamp" ]
+    }
+    stop_service() {
+        trap '' HUP INT TERM
+        if [ -n "$child" ]; then
+            if same_child; then
+                kill -TERM "$child" 2>/dev/null || :
+                # Only our direct child is signalled. In particular, a locker
+                # forked by Shell is not part of this termination operation.
+                for tick in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+                    same_child || break
+                    sleep 0.2
+                done
+                if same_child; then
+                    kill -KILL "$child" 2>/dev/null || :
+                fi
+            fi
+            wait "$child" 2>/dev/null || :
+        fi
+        exit 0
+    }
+    # Record termination even during launch; do not exit between fork and the
+    # assignment of $!, which would leave an untracked child behind.
+    trap 'stopping=1; [ "$launching" -eq 1 ] || stop_service' HUP INT TERM
+    start_child() {
+        launching=1
+        child_stamp=
+        "$@" &
+        child=$!
+        child_stamp=$(process_stamp "$child")
+        launching=0
+        [ "$stopping" -eq 0 ] || stop_service
+    }
+    wait_child() {
+        result=0
+        wait "$child" || result=$?
+        [ "$stopping" -eq 0 ] || stop_service
+        child=
+        child_stamp=
+    }
+    while :; do
+        started=$(date +%s)
+        start_child "$1"
+        wait_child
+        # Exit 75 is the agent's explicit loss of the real PAM/session binding.
+        # Polkit-only failure uses ordinary retry. A lost elogind/system/session
+        # bus instead ends this login, so greetd can open a fresh PAM session.
+        if [ "$result" -eq 75 ] && [ "$1" = /usr/bin/alcard-polkit-agent ]; then
+            echo 'Alcard session: login context lost; returning to greetd' >&2
+            if [ "$(process_stamp "$session_client_pid")" = "$session_client_stamp" ]; then
+                kill -TERM "$session_client_pid" 2>/dev/null || :
+            fi
+            exit 0
+        fi
+        elapsed=$(($(date +%s) - started))
+        [ "$elapsed" -lt 30 ] || delay=1
+        echo "Alcard session: ${1##*/} exited ($result); retry in ${delay}s" >&2
+        start_child sleep "$delay"
+        wait_child
+        [ "$delay" -ge 30 ] || delay=$((delay * 2))
+        [ "$delay" -le 30 ] || delay=30
+    done
+}
+
+shell_worker=
+shell_worker_stamp=
+auth_worker=
+auth_worker_stamp=
+audio_worker=
+audio_worker_stamp=
+session_stopping=0
+session_launching=1
+signal_worker() {
+    if [ -n "$1" ] && [ -n "$2" ] && [ "$(process_stamp "$1")" = "$2" ]; then
+        kill -TERM "$1" 2>/dev/null || :
+    fi
+}
+cleanup() {
+    trap '' HUP INT TERM
+    trap - EXIT
+    signal_worker "$shell_worker" "$shell_worker_stamp"
+    signal_worker "$auth_worker" "$auth_worker_stamp"
+    signal_worker "$audio_worker" "$audio_worker_stamp"
+    [ -z "$shell_worker" ] || wait "$shell_worker" 2>/dev/null || :
+    [ -z "$auth_worker" ] || wait "$auth_worker" 2>/dev/null || :
+    [ -z "$audio_worker" ] || wait "$audio_worker" 2>/dev/null || :
+}
+trap 'session_stopping=1; [ "$session_launching" -eq 1 ] || exit 0' HUP INT TERM
+trap cleanup EXIT
+# Audio failure must leave the desktop usable. This helper reports failure
+# and stops only its own stack; a fresh login retries without a restart loop.
+/bin/setpriv --pdeathsig TERM /usr/libexec/alcard/audio-session \
+    "$session_client_pid" "$session_client_stamp" &
+audio_worker=$!
+audio_worker_stamp=$(process_stamp "$audio_worker")
+supervise /usr/bin/alcard-polkit-agent &
+auth_worker=$!
+auth_worker_stamp=$(process_stamp "$auth_worker")
+supervise /usr/bin/alcard-shell &
+shell_worker=$!
+shell_worker_stamp=$(process_stamp "$shell_worker")
+session_launching=0
+[ "$session_stopping" -eq 0 ] || exit 0
+# If the Shell supervisor itself fails, end this login instead of retaining an
+# unusable desktop. Ordinary child failures are handled inside supervise().
+result=0
+wait "$shell_worker" || result=$?
+[ "$session_stopping" -eq 0 ] || exit 0
+exit "$result"

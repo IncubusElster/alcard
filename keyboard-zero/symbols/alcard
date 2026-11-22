@@ -1,0 +1,98 @@
+// Alcard Cardputer Zero; generated from keyboard-zero/layouts.json
+// Original physical positions and Sym symbol layer are shared by all layouts.
+// Fn-layer is implemented by the M5Stack TCA8418 kernel driver; Fn+Esc emits Super.
+default partial alphanumeric_keys xkb_symbols "us" {
+    include "us(basic)"
+    name[Group1] = "Cardputer Zero Original US";
+    key <AD11> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0021, U0021 ] };
+    key <AD12> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0040, U0040 ] };
+    key <AC10> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0023, U0023 ] };
+    key <AC11> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0024, U0024 ] };
+    key <TLDE> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0025, U0025 ] };
+    key <BKSL> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U005E, U005E ] };
+    key <AB08> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0026, U0026 ] };
+    key <AB09> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U002A, U002A ] };
+    key <AB10> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0028, U0028 ] };
+    key <MUHE> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0029, U0029 ] };
+    key <KPMU> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U007E, U007E ] };
+    key <NMLK> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0060, U0060 ] };
+    key <SCLK> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U005F, U005F ] };
+    key <KP7> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U002D, U002D ] };
+    key <KP8> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U002B, U002B ] };
+    key <KP9> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U003D, U003D ] };
+    key <KPSU> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U005B, U005B ] };
+    key <KP4> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U005D, U005D ] };
+    key <KP5> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U007B, U007B ] };
+    key <KP6> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U007D, U007D ] };
+    key <KP1> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U003B, U003B ] };
+    key <KP2> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U003A, U003A ] };
+    key <KP3> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0027, U0027 ] };
+    key <KP0> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0022, U0022 ] };
+    key <KPDL> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U003C, U003C ] };
+    key <AE13> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U003E, U003E ] };
+    key <LSGT> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U005C, U005C ] };
+    key <AB11> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U007C, U007C ] };
+    key <KATA> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U002C, U002C ] };
+    key <HIRA> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U002E, U002E ] };
+    key <HENK> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U002F, U002F ] };
+    key <HKTG> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U003F, U003F ] };
+    modifier_map None { <NMLK>, <SCLK> };
+};
+
+partial alphanumeric_keys xkb_symbols "ru" {
+    include "alcard(us)"
+    include "level3(ralt_switch)"
+    name[Group1] = "Cardputer Zero Russian";
+    key <AD01> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0439, U0419, U0451, U0401 ] };
+    key <AD02> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0446, U0426 ] };
+    key <AD03> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0443, U0423, U044D, U042D ] };
+    key <AD04> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U043A, U041A ] };
+    key <AD05> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0435, U0415 ] };
+    key <AD06> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U043D, U041D ] };
+    key <AD07> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0433, U0413, U044E, U042E ] };
+    key <AD08> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0448, U0428 ] };
+    key <AD09> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0449, U0429 ] };
+    key <AD10> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0437, U0417, U044A, U042A ] };
+    key <AC01> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0444, U0424 ] };
+    key <AC02> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U044B, U042B ] };
+    key <AC03> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0432, U0412 ] };
+    key <AC04> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0430, U0410 ] };
+    key <AC05> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U043F, U041F ] };
+    key <AC06> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0440, U0420, U0445, U0425 ] };
+    key <AC07> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U043E, U041E, U0436, U0416 ] };
+    key <AC08> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U043B, U041B ] };
+    key <AC09> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0434, U0414 ] };
+    key <AB01> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U044F, U042F ] };
+    key <AB02> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0447, U0427 ] };
+    key <AB03> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0441, U0421 ] };
+    key <AB04> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U043C, U041C ] };
+    key <AB05> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0438, U0418, U0431, U0411 ] };
+    key <AB06> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0442, U0422 ] };
+    key <AB07> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U044C, U042C ] };
+};
+
+partial alphanumeric_keys xkb_symbols "es" {
+    include "alcard(us)"
+    include "level3(ralt_switch)"
+    name[Group1] = "Cardputer Zero Spanish";
+    key <AD03> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0065, U0045, U00E9, U00C9 ] };
+    key <AD06> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0079, U0059, U00FC, U00DC ] };
+    key <AD07> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0075, U0055, U00FA, U00DA ] };
+    key <AD08> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0069, U0049, U00ED, U00CD ] };
+    key <AD09> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U006F, U004F, U00F3, U00D3 ] };
+    key <AC01> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0061, U0041, U00E1, U00C1 ] };
+    key <AB06> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U006E, U004E, U00F1, U00D1 ] };
+};
+
+partial alphanumeric_keys xkb_symbols "de" {
+    include "alcard(us)"
+    include "level3(ralt_switch)"
+    name[Group1] = "Cardputer Zero German";
+    key <AD06> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U007A, U005A ] };
+    key <AD07> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0075, U0055, U00FC, U00DC ] };
+    key <AD09> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U006F, U004F, U00F6, U00D6 ] };
+    key <AC01> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0061, U0041, U00E4, U00C4 ] };
+    key <AC02> { type[Group1] = "FOUR_LEVEL", symbols[Group1] = [ U0073, U0053, U00DF, U0053 ] };
+    key <AB01> { type[Group1] = "TWO_LEVEL", symbols[Group1] = [ U0079, U0059 ] };
+};
+

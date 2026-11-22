@@ -1,0 +1,10 @@
+[package]
+name = "alcard-l10n"
+description = "Embedded English, Russian and Spanish catalogs for Alcard"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+serde_json = "1.0.154"

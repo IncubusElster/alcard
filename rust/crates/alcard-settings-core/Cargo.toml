@@ -1,0 +1,29 @@
+[package]
+name = "alcard-settings-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde_json = "1.0"
+toml = "1.2.1"
+toml_edit = "0.25"
+libc = "0.2.191"
+
+[features]
+pairing = ["dep:zbus", "dep:async-channel", "dep:futures-lite"]
+
+[dependencies.zbus]
+version = "6.3"
+default-features = false
+features = ["default-rt", "service", "proxy"]
+optional = true
+
+[dependencies.async-channel]
+version = "2"
+optional = true
+
+[dependencies.futures-lite]
+version = "2"
+optional = true

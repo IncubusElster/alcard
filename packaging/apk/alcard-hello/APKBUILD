@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+pkgname=alcard-hello
+pkgver=0.1.0
+pkgrel=6
+pkgdesc="Alcard firstboot TUI and local account setup backend"
+url="https://github.com/IncubusElster/alcard"
+arch="aarch64"
+license="GPL-3.0-or-later"
+depends="alpine-base alpine-conf openrc doas shadow tzdata kbd-bkeymaps musl-locales kbd dbus>=1.16.2 dbus-openrc networkmanager networkmanager-openrc networkmanager-cli networkmanager-wifi bluez brightnessctl chrony chrony-openrc alcard-keyboard-zero=0.1.0-r0"
+replaces="alcard-shell<0.1.0-r9"
+install="$pkgname.post-upgrade"
+options="!strip"
+source="$pkgname-$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+sha512sums=""
+
+check() {
+    test -s "$builddir/alcard-settings" || return 1
+    test -s "$builddir/alcard-setupd" || return 1
+    sh -n "$builddir/tty1-dispatch" || return 1
+    sh -n "$builddir/firstboot-init" || return 1
+    sh -n "$builddir/start-session" || return 1
+    test -s "$builddir/alcard-greetd.toml" || return 1
+    test -s "$builddir/alcard-greetd.pamd" || return 1
+}
+package() {
+    install -Dm644 "$builddir/org.bluez.service" "$pkgdir/etc/dbus-1/system-services/org.bluez.service"
+    install -Dm644 "$builddir/bluetooth.conf" "$pkgdir/etc/alcard/bluetooth.conf"
+    install -Dm644 "$builddir/alcard-settings.desktop" "$pkgdir/usr/share/applications/alcard-settings.desktop"
+    install -Dm755 "$builddir/alcard-settings" "$pkgdir/usr/bin/alcard-settings"
+    install -Dm700 "$builddir/alcard-setupd" "$pkgdir/usr/sbin/alcard-setupd"
+    install -Dm755 "$builddir/tty1-dispatch" "$pkgdir/usr/libexec/alcard/tty1-dispatch"
+    install -Dm700 "$builddir/firstboot-init" "$pkgdir/usr/libexec/alcard/firstboot-init"
+    install -Dm755 "$builddir/start-session" "$pkgdir/usr/libexec/alcard/start-session"
+    install -Dm644 "$builddir/alcard-greetd.toml" "$pkgdir/etc/greetd/alcard.toml"
+    install -Dm644 "$builddir/alcard-greetd.pamd" "$pkgdir/etc/pam.d/alcard-greetd"
+}

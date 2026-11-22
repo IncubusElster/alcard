@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+pkgname=alcard-polkit-agent
+pkgver=0.1.0
+pkgrel=6
+pkgdesc="Alcard graphical polkit authentication agent for elogind sessions"
+url="https://github.com/IncubusElster/alcard"
+arch="aarch64"
+license="GPL-3.0-or-later"
+# The no-elogind polkit provider cannot track our Unix login sessions.
+depends="polkit-elogind glib libxkbcommon"
+options="!strip"
+source="$pkgname-$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+sha512sums=""
+
+check() {
+    test -x "$builddir/alcard-polkit-agent"
+}
+
+package() {
+    install -Dm755 "$builddir/alcard-polkit-agent" "$pkgdir/usr/bin/alcard-polkit-agent"
+}

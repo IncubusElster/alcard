@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/alcard-input",
+    "crates/alcard-settings-core",
+    "crates/alcard-l10n",
+    "crates/alcard-lock-state",
+    "crates/alcard-setup-core",
+    "crates/alcard-setup-protocol",
+    "apps/alcard-setupd",
+    "apps/alcard-settings",
+]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
+version = "0.1.0"

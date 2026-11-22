@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+pkgname=alcard-keyboard-zero
+pkgver=0.1.0
+pkgrel=0
+pkgdesc="Cardputer Zero physical US / optional RU ES DE keyboard layouts for TTY and XKB"
+url="https://github.com/IncubusElster/alcard"
+arch="noarch"
+license="GPL-3.0-or-later"
+depends="kbd"
+makedepends="kbd python3"
+options="!strip"
+source="$pkgname-$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+sha512sums=""
+
+build() {
+    mkdir -p "$builddir/generated"
+    local layout
+    for layout in us ru es de; do
+        # Force Unicode: otherwise kbd may misresolve Cyrillic U+XXXX symbols.
+        # Keep loadkeys outside a pipeline: abuild uses /bin/sh, where an
+        # upstream loadkeys error could be masked by successful gzip.
+        loadkeys --unicode --bkeymap "$builddir/console/$layout.map" \
+            > "$builddir/generated/$layout.bmap" || return 1
+        [ -s "$builddir/generated/$layout.bmap" ] || return 1
+        gzip -n -9 -c "$builddir/generated/$layout.bmap" \
+            > "$builddir/generated/$layout.bmap.gz" || return 1
+    done
+}
+
+check() {
+    python3 "$builddir/verify-keyboard.py"         "$builddir/layouts.json" "$builddir/symbols/alcard"         "$builddir/console" "$builddir/generated" || return 1
+}
+
+package() {
+    local layout
+    install -Dm644 "$builddir/symbols/alcard"         "$pkgdir/usr/share/X11/xkb/symbols/alcard"
+    install -Dm644 "$builddir/layouts.json"         "$pkgdir/usr/share/alcard/keyboard/layouts.json"
+    for layout in us ru es de; do
+        install -Dm644 "$builddir/generated/$layout.bmap.gz"             "$pkgdir/usr/share/alcard/keyboard/console/$layout.bmap.gz"
+        install -Dm644 "$builddir/console/$layout.map"             "$pkgdir/usr/share/alcard/keyboard/sources/$layout.map"
+    done
+}

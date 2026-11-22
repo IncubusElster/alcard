@@ -1,0 +1,10 @@
+#%PAM-1.0
+# Authenticated Alcard graphical logins only; the text greeter uses greetd.
+# Keep distribution password/account rules, but require real elogind ownership.
+auth     include  base-auth
+account  include  base-account
+password include  base-password
+session  include  base-session-noninteractive
+# agreety sends no session environment. Set type before greetd starts the child;
+# an export in start-session or a user profile would be too late for elogind.
+session  required pam_elogind.so type=wayland

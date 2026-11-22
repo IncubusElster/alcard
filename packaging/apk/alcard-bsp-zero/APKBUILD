@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Alcard BSP meta-package. This APK intentionally owns no files, kernel
+# modules, firmware, DTBO or boot configuration on target devices.
+pkgname=alcard-bsp-zero
+pkgver=0.1.0
+pkgrel=2
+pkgdesc="Alcard Cardputer Zero common BSP dependencies, board profile selected separately"
+url="https://github.com/IncubusElster/alcard"
+arch="noarch"
+license="GPL-3.0-or-later"
+options="!check !strip"
+depends="
+    linux-rpi=6.18.60-r0
+    alcard-kmods-rpi=6.18.60-r3
+    alcard-firmware-zero=0.1.0-r2
+    alcard-boot-zero=0.1.0-r4
+    "
+source=""
+
+package() {
+    # No payload: apk's dependency solver owns the entire BSP composition.
+    mkdir -p "$pkgdir"
+}

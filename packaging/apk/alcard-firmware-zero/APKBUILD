@@ -1,0 +1,53 @@
+# Contributor: Alcard contributors
+# Firmware data only: no kernel module or executable is installed on target.
+pkgname=alcard-firmware-zero
+pkgver=0.1.0
+pkgrel=2
+_m5rev=4f7aeee9fc103ebb03d22cac476bb191ecfb321e
+_bmi270_sha256=2d75e68e343a13ff99be98261dfbd99d9e8c6f267da9e3c5aeb883276ad178db
+pkgdesc="Cardputer Zero MIPI-DBI display init and BMI270 data firmware"
+url="https://github.com/IncubusElster/alcard"
+arch="noarch"
+# Bosch BMI270 bytes match BSD-3-Clause SensorAPI configuration; LCD init table derives from GPL-2.0+ M5Stack code.
+license="GPL-2.0-or-later AND BSD-3-Clause"
+options="!strip"
+makedepends="python3"
+source="
+    $pkgname-$pkgver.tar.gz
+    m5stack-linux-dtoverlays-$_m5rev.tar.gz
+    "
+builddir="$srcdir/$pkgname-$pkgver"
+# Populated by `abuild checksum` in .alcard-local/, not in tracked source.
+sha512sums=""
+
+build() {
+    python3 "$builddir/tools/mipi-dbi-firmware.py" build \
+        "$builddir/board/cardputer-zero/firmware/st7789v3.toml" \
+        "$builddir/cardputerzero,st7789v.bin"
+}
+
+check() {
+    python3 "$builddir/tools/mipi-dbi-firmware.py" verify \
+        "$builddir/board/cardputer-zero/firmware/st7789v3.toml" \
+        "$builddir/cardputerzero,st7789v.bin" || return 1
+    printf '%s  %s\n' "$_bmi270_sha256" \
+        "$srcdir/m5stack-linux-dtoverlays-$_m5rev/modules/imu-1.0/bmi270-init-data.fw" | \
+        sha256sum -c - || return 1
+}
+
+package() {
+    local firmware="$pkgdir/usr/lib/firmware"
+    local docs="$pkgdir/usr/share/doc/$pkgname"
+    install -d "$firmware" "$docs" "$pkgdir/usr/share/licenses/$pkgname"
+    install -m644 "$builddir/cardputerzero,st7789v.bin" \
+        "$firmware/cardputerzero,st7789v.bin"
+    install -m644 \
+        "$srcdir/m5stack-linux-dtoverlays-$_m5rev/modules/imu-1.0/bmi270-init-data.fw" \
+        "$firmware/bmi270-init-data.fw"
+    install -m644 "$builddir/board/cardputer-zero/firmware/st7789v3.toml" \
+        "$docs/st7789v3.toml"
+    install -m644 "$builddir/packaging/apk/alcard-firmware-zero/README.md" \
+        "$docs/README.md"
+    install -m644 "$builddir/licenses/Bosch-BMI270-BSD-3-Clause.txt" \
+        "$pkgdir/usr/share/licenses/$pkgname/Bosch-BMI270-BSD-3-Clause.txt"
+}

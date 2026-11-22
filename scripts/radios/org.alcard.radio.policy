@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Alcard</vendor>
+  <vendor_url>https://github.com/IncubusElster/alcard</vendor_url>
+  <action id="org.alcard.radio.control">
+    <description>Control radios from Alcard Quick settings</description>
+    <message>Permission is required to change radio power or scan nearby devices</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/alcard/alcard-radio-helper</annotate>
+  </action>
+</policyconfig>

@@ -1,0 +1,16 @@
+# This patch targets M5Stack BSP pinned revision 4f7aeee9fc103ebb03d22cac476bb191ecfb321e.
+# A platform device below / is not an addressable I2C child; `reg = <0x10>`
+# at the root was invalid DT and caused reg_format warnings.
+# The AUX address is an explicit board-specific property instead.
+--- a/modules/imu-1.0/magnetometer/bmc150_magn_bmi270.c
++++ b/modules/imu-1.0/magnetometer/bmc150_magn_bmi270.c
+@@ -422,7 +422,8 @@
+ 	if (!bridge)
+ 		return -ENOMEM;
+ 
+-	ret = of_property_read_u32(pdev->dev.of_node, "reg", &aux_i2c_addr);
++	ret = of_property_read_u32(pdev->dev.of_node, "bosch,aux-i2c-addr",
++				   &aux_i2c_addr);
+ 	if (ret)
+ 		return dev_err_probe(&pdev->dev, ret,
+ 				     "Failed to read BMM150 I2C address\n");

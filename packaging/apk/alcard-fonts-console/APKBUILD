@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: CC0-1.0
+pkgname=alcard-fonts-console
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Alcard Pixel Regular/Bold PSF2 8x8 console fonts"
+url="https://github.com/IncubusElster/alcard"
+arch="noarch"
+license="CC0-1.0"
+depends="kbd"
+makedepends="python3"
+options="!strip"
+source="$pkgname-$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+sha512sums=""
+
+build() {
+    python3 "$builddir/tools/build-alcard-fonts.py" \
+        --regular "$builddir/fonts/AlcardPixel-Regular.hex" \
+        --bold "$builddir/fonts/AlcardPixel-Bold.hex" \
+        --output "$builddir/generated"
+}
+check() {
+    python3 - "$builddir/generated" <<'PY'
+import pathlib, struct, sys
+root = pathlib.Path(sys.argv[1])
+required = set(range(0x20, 0x7f)) | set(map(ord,
+    'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя'
+    'áéíóúüñÁÉÍÓÚÜÑ¡¿āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜüńňǹ'))
+for weight in ('Regular', 'Bold'):
+    original = {}
+    source = root.parent / 'fonts' / f'AlcardPixel-{weight}.hex'
+    for line in source.read_text('utf-8-sig').splitlines():
+        if not line.strip() or line.lstrip().startswith('#'):
+            continue
+        codepoint, bitmap = line.strip().split(':')
+        original[int(codepoint, 16)] = bytes.fromhex(bitmap)
+    for group, count in [('core',256),('extended',512)]:
+        font = root / f'AlcardPixel-{weight}-{group}-8x8.psf'
+        data = font.read_bytes()
+        magic, version, header, flags, glyphs, charsize, height, width = struct.unpack_from('<8I', data)
+        assert magic == 0x864AB572 and version == 0 and header == 32
+        assert flags == 1 and glyphs == count and charsize == 8
+        assert height == width == 8
+        assert len(data) > 32 + count*8
+        entries = data[32 + count*8:].split(b'\xff')
+        assert len(entries) == count + 1 and entries[-1] == b''
+        mapping = [entry.decode('utf-8') for entry in entries[:-1]]
+        codepoints = [ord(entry[0]) for entry in mapping]
+        assert len(set(codepoints)) == count and required <= set(codepoints)
+        for slot, codepoint in enumerate(codepoints):
+            assert data[32 + slot*8:32 + (slot+1)*8] == original[codepoint]
+            assert mapping[slot] == chr(codepoint) + ('\ufffd' if codepoint == 0x3f else '')
+        # Real VT clear/scroll and printk bypass the Unicode table. Checking
+        # only its codepoint coverage cannot detect a misplaced erase glyph.
+        for codepoint in range(0x20, 0x7f):
+            assert codepoints[codepoint] == codepoint
+        assert data[32 + 0x20*8:32 + 0x21*8] == bytes(8)
+PY
+}
+package() {
+    install -d "$pkgdir/usr/share/kbd/consolefonts"
+    install -m644 "$builddir"/generated/*.psf "$pkgdir/usr/share/kbd/consolefonts/"
+}

@@ -1,0 +1,5 @@
+# Dedicated current-user unlock policy; leave the distribution stacks intact.
+# Install as root: /etc/pam.d/alcard-lock, mode 0644.
+auth include common-auth
+account include common-account
+

@@ -1,0 +1,20 @@
+# Local build inputs, cached upstream source trees and APK artifacts.
+/.alcard-local/
+
+# Legacy/local outputs from the early experimental image builder.
+/upstream/
+/build/
+/dist/
+
+# Rust build outputs, including independent application workspaces.
+/rust/target/
+/rust/**/target/
+/rust/.idea/
+/rust/.vscode/
+
+# Application lockfiles are source inputs for reproducible APK builds.
+!/rust/apps/alcard-shell/Cargo.lock
+
+# Local Python validation caches
+__pycache__/
+*.py[cod]

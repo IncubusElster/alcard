@@ -1,0 +1,126 @@
+name: Alcard CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Source checks, or current APK/runtime/login/Hello acceptance
+        type: choice
+        required: true
+        default: source
+        options: [source, acceptance]
+
+permissions:
+  contents: read
+
+# One running workflow for the repository, including manual acceptance. A new
+# push waits instead of discarding a paid acceptance run that is already active.
+concurrency:
+  group: alcard-ci
+  cancel-in-progress: false
+
+jobs:
+  alpine:
+    name: One ARM runner, sequential checks
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: ${{ inputs.mode == 'acceptance' && 65 || 35 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Select the smallest applicable check scope
+        id: plan
+        env:
+          ALCARD_CI_MODE: ${{ inputs.mode || 'source' }}
+        run: python3 scripts/ci/select.py
+
+      - name: Static source, package and documentation preflight
+        run: |
+          set -euo pipefail
+          mkdir -p .alcard-local/ci/static
+          bash build.sh audit 2>&1 | tee .alcard-local/ci/static/build-audit.log
+          python3 tools/check-docs.py 2>&1 | tee .alcard-local/ci/static/docs.log
+          python3 scripts/ci/test-select.py 2>&1 | tee .alcard-local/ci/static/selection-tests.log
+          python3 tools/test-package-metadata.py 2>&1 | tee .alcard-local/ci/static/metadata-tests.log
+          python3 tools/package_metadata.py manifest > .alcard-local/ci/static/package-recipes.json
+
+      - name: Resolve Alpine image and toolchain cache context
+        if: steps.plan.outputs.scope != 'static'
+        id: toolchain
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          docker pull alpine:3.24
+          {
+            docker image inspect alpine:3.24 --format '{{.Id}} {{json .RepoDigests}}'
+            docker run --rm alpine:3.24 sh -eu -c 'apk update >/dev/null; apk policy rust cargo'
+          } > .alcard-local/ci/toolchain-context.txt
+          context_key="$(sha256sum .alcard-local/ci/toolchain-context.txt | cut -d ' ' -f 1)"
+          printf 'key=%s\n' "$context_key" >> "$GITHUB_OUTPUT"
+
+      - name: Restore dependency and compiler caches
+        if: steps.plan.outputs.scope != 'static'
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        timeout-minutes: 3
+        with:
+          path: |
+            .alcard-local/ci-cache/cargo-home/registry
+            .alcard-local/ci-cache/cargo-target
+          key: alcard-arm64-v1-${{ steps.toolchain.outputs.key }}-${{ hashFiles('rust/**/Cargo.lock') }}-${{ steps.plan.outputs.scope }}-${{ hashFiles('rust/**', 'fonts/alcard-pixel/source/**', 'keyboard-zero/**', 'scripts/ci/**', 'scripts/check-alpine-source.sh') }}
+          restore-keys: |
+            alcard-arm64-v1-${{ steps.toolchain.outputs.key }}-${{ hashFiles('rust/**/Cargo.lock') }}-
+
+      - name: Install VM tools only for explicit acceptance
+        if: steps.plan.outputs.scope == 'acceptance'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends qemu-system-arm python3-pil
+
+      - name: Run the selected Alpine gates sequentially
+        if: steps.plan.outputs.scope != 'static'
+        env:
+          ALCARD_CI_SCOPE: ${{ steps.plan.outputs.scope }}
+        run: bash scripts/ci/run.sh "$ALCARD_CI_SCOPE"
+
+      - name: Remove disposable guest credentials
+        if: always()
+        run: rm -rf -- .alcard-local/ci-login/private
+
+      - name: Restore cache ownership to the runner
+        if: always() && steps.plan.outputs.scope != 'static'
+        timeout-minutes: 1
+        run: |
+          cache_path="$GITHUB_WORKSPACE/.alcard-local/ci-cache"
+          if [[ -e "$cache_path" || -L "$cache_path" ]]; then
+            [[ -d "$cache_path" && ! -L "$cache_path" ]]
+            sudo -n chown -h -R -P -- "$(id -u):$(id -g)" "$cache_path"
+          fi
+
+      - name: Upload current public receipts and APK outputs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: alcard-CI-ARM64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .alcard-local/ci/
+            .alcard-local/ci-packages/
+            .alcard-local/ci-login/evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Preserve compilation work after later gate failures
+        if: always() && !cancelled() && steps.cache.outcome == 'success' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        timeout-minutes: 3
+        with:
+          path: |
+            .alcard-local/ci-cache/cargo-home/registry
+            .alcard-local/ci-cache/cargo-target
+          key: ${{ steps.cache.outputs.cache-primary-key }}
