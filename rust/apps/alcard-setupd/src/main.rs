@@ -1,9 +1,11 @@
-//! Alcard firstboot backend: root-gated account setup and read-only checks.
+//! Alcard backend: root-gated firstboot, installed Settings and read-only checks.
 //! No listener, socket, developer service or remote API.
 mod admin_policy;
 mod apply;
 mod failure;
 mod network_upgrade;
+mod settings;
+mod system_config;
 
 use alcard_setup_protocol::{validate, SetupPlan};
 use std::io::{self, Read};
@@ -39,7 +41,7 @@ fn main() {
         if args.next().is_some() {
             usage();
         }
-        if let Err(error) = apply::setting(&key, &value) {
+        if let Err(error) = settings::apply(&key, &value) {
             eprintln!("{} ({})", error, error.kind());
             std::process::exit(1);
         }

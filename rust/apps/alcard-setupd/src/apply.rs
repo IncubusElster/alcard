@@ -2,13 +2,16 @@
 //! Never accept credentials via argv, environment, persisted files or logs.
 use crate::admin_policy::PreparedAdmin;
 use crate::failure::{at, invalid, Stage};
+use crate::system_config::{
+    atomic_write, check_alpine, command, ntp_service, set_language, set_layouts, set_timezone,
+};
 use alcard_setup_protocol::{session_runtime, validate_for_firstboot, SetupPlan};
 use serde::Deserialize;
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::{self, Read, Write},
-    os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
-    path::{Path, PathBuf},
+    os::unix::fs::{MetadataExt, PermissionsExt},
+    path::Path,
     process::{Command, Stdio},
 };
 use zeroize::{Zeroize, Zeroizing};
@@ -81,14 +84,6 @@ fn check_file(path: &Path, required_mode: u32) -> io::Result<()> {
     }
     Ok(())
 }
-fn check_alpine() -> io::Result<()> {
-    let os_release = fs::read_to_string("/etc/os-release")?;
-    if !os_release.lines().any(|line| line.trim() == "ID=alpine") {
-        return Err(invalid("alpine_guest_required"));
-    }
-    Ok(())
-}
-
 fn check_guest() -> io::Result<()> {
     if unsafe { libc::geteuid() } != 0 {
         return Err(io::Error::new(
@@ -240,18 +235,6 @@ pub fn arm_firstboot() -> io::Result<()> {
     atomic_write(Path::new(PENDING), MARKER.as_bytes(), 0o600)
 }
 
-fn command(binary: &str, arguments: &[&str]) -> io::Result<()> {
-    let status = Command::new(binary)
-        .args(arguments)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()?;
-    if !status.success() {
-        return Err(invalid("system_command_failed"));
-    }
-    Ok(())
-}
 fn password_change(username: &str, password: &str) -> io::Result<()> {
     // Shadow-utils chpasswd via stdin: never give secrets as arguments.
     let mut child = Command::new("/usr/sbin/chpasswd")
@@ -279,30 +262,6 @@ fn password_change(username: &str, password: &str) -> io::Result<()> {
         return Err(invalid("password_change_failed"));
     }
     Ok(())
-}
-
-pub(crate) fn atomic_write(path: &Path, value: &[u8], mode: u32) -> io::Result<()> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| invalid("invalid_output_path"))?;
-    // Firstboot and separate Settings frontends can write concurrently.
-    let temp = path.with_extension(format!("alcard-new-{}", std::process::id()));
-    if temp.exists() {
-        fs::remove_file(&temp)?;
-    }
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(mode)
-        .open(&temp)?;
-    // Preserve the requested policy/config mode even under a root umask of 077.
-    // The descriptor is a newly created file inside a trusted parent directory.
-    file.set_permissions(fs::Permissions::from_mode(mode))?;
-    file.write_all(value)?;
-    file.sync_all()?;
-    drop(file);
-    fs::rename(temp, path)?;
-    File::open(parent)?.sync_all()
 }
 
 fn user_exists(username: &str) -> io::Result<bool> {
@@ -376,229 +335,6 @@ fn configure_consoles(plan: &SetupPlan) -> io::Result<()> {
         command("/sbin/rc-update", &["add", ntp_service()?, "default"])?;
     }
     Ok(())
-}
-
-fn set_language(lang: &str) -> io::Result<()> {
-    fs::create_dir_all("/etc/profile.d")?;
-    atomic_write(
-        Path::new("/etc/profile.d/alcard-locale.sh"),
-        format!("export LANG='{lang}'\n").as_bytes(),
-        0o644,
-    )?;
-    Ok(())
-}
-
-fn set_layouts(layouts: &[&str]) -> io::Result<()> {
-    // US is mandatory, first, and remains the console's boot layout.
-    if layouts.first() != Some(&"us") {
-        return Err(invalid("original_us_required"));
-    }
-    let installed = Path::new("/usr/share/alcard/keyboard/console");
-    for layout in layouts {
-        if !installed.join(format!("{layout}.bmap.gz")).is_file() {
-            return Err(invalid("selected_alcard_keymap_unavailable"));
-        }
-    }
-    let keymap = fs::read(installed.join("us.bmap.gz"))?;
-    fs::create_dir_all("/etc/keymap")?;
-    atomic_write(Path::new("/etc/keymap/alcard.bmap.gz"), &keymap, 0o644)?;
-    if !Path::new("/etc/init.d/loadkmap").is_file() {
-        return Err(invalid("loadkmap_service_unavailable"));
-    }
-    atomic_write(
-        Path::new("/etc/conf.d/loadkmap"),
-        b"KEYMAP=/etc/keymap/alcard.bmap.gz\n",
-        0o644,
-    )?;
-    command("/sbin/rc-update", &["add", "loadkmap", "boot"])?;
-    // Keep US first for all sessions; additional layouts can be selected
-    // later by the runtime keyboard switcher.
-    atomic_write(
-        Path::new("/etc/alcard-keyboards"),
-        format!("{}\n", layouts.join(",")).as_bytes(),
-        0o644,
-    )?;
-    // Generated env contains only strictly validated enum-derived identifiers.
-    // The session script must opt in to reading this after graphical packaging.
-    fs::create_dir_all("/etc/alcard")?;
-    let groups = std::iter::repeat_n("alcard", layouts.len())
-        .collect::<Vec<_>>()
-        .join(",");
-    let variants = layouts.join(",");
-    let options = if layouts.len() > 1 {
-        "grp:alt_shift_toggle"
-    } else {
-        ""
-    };
-    atomic_write(Path::new("/etc/alcard/keyboard-xkb.env"),
-        format!("export XKB_DEFAULT_LAYOUT='{groups}'\nexport XKB_DEFAULT_VARIANT='{variants}'\nexport XKB_DEFAULT_OPTIONS='{options}'\n").as_bytes(), 0o644)?;
-
-    Ok(())
-}
-
-fn set_timezone(tz: &str) -> io::Result<()> {
-    let zone_path = PathBuf::from("/usr/share/zoneinfo").join(tz);
-    if !zone_path.is_file() {
-        return Err(invalid("timezone_not_installed"));
-    }
-    // No arbitrary path traversal: validated by protocol before this call.
-    let data = fs::read(zone_path)?;
-    atomic_write(Path::new("/etc/localtime"), &data, 0o644)?;
-    atomic_write(
-        Path::new("/etc/timezone"),
-        format!("{tz}\n").as_bytes(),
-        0o644,
-    )?;
-    Ok(())
-}
-
-fn ntp_service() -> io::Result<&'static str> {
-    ["chronyd", "ntpd"]
-        .into_iter()
-        .find(|s| Path::new("/etc/init.d").join(s).is_file())
-        .ok_or_else(|| invalid("ntp_service_required"))
-}
-
-/// Authenticated post-install actions have no access to account provisioning.
-pub fn setting(key: &str, value: &str) -> io::Result<()> {
-    if unsafe { libc::geteuid() } != 0 {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "root required",
-        ));
-    }
-    check_alpine()?;
-    let lock = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open("/run/alcard-settings.lock")?;
-    lock.lock()?;
-    match key {
-        "hostname"
-            if !value.is_empty()
-                && value.len() <= 63
-                && !value.starts_with('-')
-                && !value.ends_with('-')
-                && value
-                    .bytes()
-                    .all(|c| c.is_ascii_alphanumeric() || c == b'-') =>
-        {
-            command("/bin/hostname", &[value])?;
-            atomic_write(
-                Path::new("/etc/hostname"),
-                format!("{value}\n").as_bytes(),
-                0o644,
-            )
-        }
-        "language" => set_language(match value {
-            "en" => "en_US.UTF-8",
-            "ru" => "ru_RU.UTF-8",
-            "es" => "es_ES.UTF-8",
-            _ => return Err(invalid("invalid_language")),
-        }),
-        "layouts" => {
-            let layouts = value.split(',').collect::<Vec<_>>();
-            if layouts.len() > 4
-                || layouts.iter().enumerate().any(|(i, x)| {
-                    !matches!(*x, "us" | "ru" | "es" | "de") || layouts[..i].contains(x)
-                })
-            {
-                return Err(invalid("invalid_layouts"));
-            }
-            set_layouts(&layouts)
-        }
-        "active-layout" if matches!(value, "us" | "ru" | "de" | "es") => {
-            if !fs::read_to_string("/etc/alcard-keyboards")?
-                .trim()
-                .split(',')
-                .any(|l| l == value)
-            {
-                return Err(invalid("layout_not_selected"));
-            }
-            let out = Command::new("/bin/gzip")
-                .args([
-                    "-dc",
-                    &format!("/usr/share/alcard/keyboard/console/{value}.bmap.gz"),
-                ])
-                .output()?;
-            if !out.status.success() {
-                return Err(invalid("keymap_unavailable"));
-            }
-            let mut child = Command::new("/sbin/loadkmap")
-                .stdin(Stdio::piped())
-                .spawn()?;
-            let wrote = child.stdin.take().unwrap().write_all(&out.stdout);
-            let status = child.wait()?;
-            wrote?;
-            if !status.success() {
-                return Err(invalid("keymap_failed"));
-            }
-            atomic_write(
-                Path::new("/run/alcard-active-layout"),
-                value.as_bytes(),
-                0o644,
-            )
-        }
-        "timezone" if alcard_setup_protocol::is_valid_timezone(value) => {
-            let data = fs::read(Path::new("/usr/share/zoneinfo").join(value))?;
-            if !data.starts_with(b"TZif") {
-                return Err(invalid("invalid_timezone"));
-            }
-            set_timezone(value)
-        }
-        "ntp" if matches!(value, "on" | "off") => {
-            let service = ntp_service()?;
-            let enabled = value == "on";
-            let started = Path::new("/run/openrc/started").join(service).exists();
-            if enabled != started {
-                command(
-                    "/sbin/rc-service",
-                    &[service, if enabled { "start" } else { "stop" }],
-                )?;
-            }
-            command(
-                "/sbin/rc-update",
-                &[if enabled { "add" } else { "del" }, service, "default"],
-            )
-        }
-        "datetime" => {
-            if ["chronyd", "ntpd"].iter().any(|s| {
-                Path::new("/etc/runlevels/default").join(s).exists()
-                    || Path::new("/run/openrc/started").join(s).exists()
-            }) {
-                return Err(invalid("disable_ntp_first"));
-            }
-            if value.len() != 19
-                || !value.bytes().enumerate().all(|(i, b)| match i {
-                    4 | 7 => b == b'-',
-                    10 => b == b' ',
-                    13 | 16 => b == b':',
-                    _ => b.is_ascii_digit(),
-                })
-            {
-                return Err(invalid("invalid_local_datetime"));
-            }
-            let parsed = Command::new("/bin/date")
-                .args(["-d", value, "+%Y-%m-%d %H:%M:%S"])
-                .output()?;
-            if !parsed.status.success() || parsed.stdout != format!("{value}\n").as_bytes() {
-                return Err(invalid("invalid_local_datetime"));
-            }
-            command("/bin/date", &["-s", value])?;
-            if Path::new("/dev/rtc0").exists() {
-                command("/sbin/hwclock", &["--systohc", "--utc"])?;
-            }
-            Ok(())
-        }
-        "brightness" if value.parse::<u8>().is_ok_and(|n| n <= 100) => command(
-            "/usr/bin/brightnessctl",
-            &["-c", "backlight", "set", &format!("{value}%")],
-        ),
-        _ => Err(invalid("invalid_setting")),
-    }
 }
 
 /// The full image ships both profiles. Only an explicit Console selection

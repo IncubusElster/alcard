@@ -3,9 +3,17 @@
 version = 4
 
 [[package]]
+name = "alcard-l10n"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "alcard-settings-core"
 version = "0.1.0"
 dependencies = [
+ "alcard-l10n",
  "libc",
  "serde_json",
  "toml",
@@ -17,7 +25,6 @@ name = "alcard-ui"
 version = "0.1.0"
 dependencies = [
  "alcard-settings-core",
- "libc",
  "smithay-client-toolkit",
  "tiny-skia",
  "wayland-client",

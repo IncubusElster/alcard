@@ -306,7 +306,7 @@ impl Runtime {
                 if let Some(source) = &self.preferences {
                     match source.load() {
                         Ok(resolved) => {
-                            self.language = crate::language_from_preferences(resolved.locale);
+                            self.language = resolved.locale.resolve();
                             self.theme = resolved.theme;
                         }
                         Err(error) => {

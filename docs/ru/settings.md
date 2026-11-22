@@ -52,6 +52,8 @@ Hostname допускает 1–63 латинские ASCII-буквы, цифр
 
 Системный язык выбирается между английским, русским и испанским. Backend записывает проверенную локаль в `/etc/profile.d/alcard-locale.sh`. После операции Settings обновляет язык и запрашивает перечитывание настроек установленной Shell текущего пользователя. Общий загрузчик Shell учитывает сначала явный CLI locale, затем системный язык, затем прежнее пользовательское поле locale либо окружение/default. Обычные Settings предлагают одну настройку языка системы, без конкурирующих языковых переключателей приложений. Уже работающим сторонним программам может понадобиться новый вход/запуск для наследования окружения.
 
+Settings, Shell, locker и polkit-agent используют общий `alcard_l10n::Locale`. Автоматический выбор берёт первую непустую переменную в порядке `LC_ALL`, `LC_MESSAGES`, `LANG`, распознаёт поддерживаемые языковые префиксы без учёта регистра и выбирает английский для неподдерживаемого значения. Явный системный/CLI язык сохраняет приоритет. JSON-каталоги и подписи отдельных приложений сохраняют тексты EN/RU/ES.
+
 Original US нельзя удалить, она остаётся первой. RU/ES/DE можно включать и выключать. В них меняются буквы, а исходный символьный слой сохраняется. Набор записан в `/etc/alcard-keyboards`; сгенерированные XKB-настройки — в `/etc/alcard/keyboard-xkb.env`. Несколько графических раскладок переключаются Alt+Shift после следующего входа. Загрузочная консоль остаётся US. На номерном Linux VT Settings могут временно загрузить одну из сохранённых консольных раскладок и записывают её в `/run/alcard-active-layout`; в эмуляторе терминала эта VT-строка не показывается. См. [шрифты и клавиатуру](fonts-keyboard.md).
 
 ## Дата и время
@@ -107,6 +109,6 @@ Settings показывают яркость, когда `brightnessctl` мож�
 
 - [TUI browser](../../rust/apps/alcard-settings/src/settings.rs), [desktop entry](../../scripts/hello/alcard-settings.desktop).
 - [Общая модель строк и действий](../../rust/crates/alcard-settings-core/src/settings.rs), [клиент NetworkManager](../../rust/crates/alcard-settings-core/src/network.rs), [сопряжение](../../rust/crates/alcard-settings-core/src/pairing.rs).
-- [Preferences](../../rust/crates/alcard-settings-core/src/preferences.rs), [привилегированные настройки](../../rust/apps/alcard-setupd/src/apply.rs), [миграция прежней сети](../../rust/apps/alcard-setupd/src/network_upgrade.rs).
+- [Preferences](../../rust/crates/alcard-settings-core/src/preferences.rs), [общий выбор языка](../../rust/crates/alcard-l10n/src/locale.rs), [привилегированные настройки](../../rust/apps/alcard-setupd/src/settings.rs), [общая запись конфигурации](../../rust/apps/alcard-setupd/src/system_config.rs), [миграция прежней сети](../../rust/apps/alcard-setupd/src/network_upgrade.rs).
 
 Текущие runtime-операции NetworkManager/TUI, отмена, способы авторизации и сохранение состояния требуют целевой приёмки установленной системы. Тесты разбора данных, аргументов и отрисовки не подтверждают всё поведение служб. См. [проверки](testing.md) и [текущий статус](status.md).

@@ -336,7 +336,7 @@ impl ManagedFile {
             Change::Replace => {
                 let parent = path.parent().expect("fixed absolute policy path");
                 ensure_directory(parent)?;
-                crate::apply::atomic_write(
+                crate::system_config::atomic_write(
                     path,
                     self.desired
                         .as_ref()

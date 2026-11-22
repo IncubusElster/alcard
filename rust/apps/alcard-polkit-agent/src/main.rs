@@ -89,18 +89,5 @@ fn run() -> Result<(), Box<dyn Error>> {
     if let Some(error) = warning {
         eprintln!("Authentication presentation preferences: {error}; using valid defaults");
     }
-    gui::run(
-        language_from_preferences(resolved.locale),
-        resolved.theme,
-        preferences,
-    )
-}
-
-fn language_from_preferences(language: PreferenceLanguage) -> ui::Language {
-    match language {
-        PreferenceLanguage::Auto => ui::Language::detect(),
-        PreferenceLanguage::En => ui::Language::En,
-        PreferenceLanguage::Ru => ui::Language::Ru,
-        PreferenceLanguage::Es => ui::Language::Es,
-    }
+    gui::run(resolved.locale.resolve(), resolved.theme, preferences)
 }

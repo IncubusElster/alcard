@@ -1,6 +1,6 @@
-//! Strict, non-secret contract for H3 backend preflight.
-//! No password fields are accepted or serialized. A later authenticated,
-//! privileged, local-only secret channel must be designed separately.
+//! Strict, non-secret firstboot plan shared by Hello and the setup backend.
+//! This plan excludes password fields. Hello sends credentials separately in the
+//! firstboot request over stdin to the root-gated local setup backend.
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 pub mod session_runtime;

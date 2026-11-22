@@ -9,9 +9,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "alcard-l10n"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "alcard-lock"
 version = "0.1.0"
 dependencies = [
+ "alcard-l10n",
  "alcard-lock-state",
  "alcard-ui",
  "chrono",
@@ -35,6 +43,7 @@ dependencies = [
 name = "alcard-settings-core"
 version = "0.1.0"
 dependencies = [
+ "alcard-l10n",
  "libc",
  "serde_json",
  "toml",
@@ -46,7 +55,6 @@ name = "alcard-ui"
 version = "0.1.0"
 dependencies = [
  "alcard-settings-core",
- "libc",
  "smithay-client-toolkit",
  "tiny-skia",
  "wayland-client",

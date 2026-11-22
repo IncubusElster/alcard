@@ -73,13 +73,11 @@ struct Browser {
     locale: Locale,
 }
 fn locale() -> Locale {
-    match preferences::system_language() {
-        Some("en") => Locale::En,
-        Some("es") => Locale::Es,
-        Some("ru") => Locale::Ru,
-        _ => super::cli_locale(),
-    }
+    preferences::system_language()
+        .and_then(Locale::from_code)
+        .unwrap_or_else(super::cli_locale)
 }
+
 fn clean(s: &str) -> String {
     s.chars().filter(|c| !c.is_control()).collect()
 }

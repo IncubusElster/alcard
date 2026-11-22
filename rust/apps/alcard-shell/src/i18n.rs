@@ -1,4 +1,4 @@
-//! Shell labels. Integrate with shared alcard-l10n during the localization stage.
+//! Shell-specific labels for the shared Alcard UI language.
 use crate::{
     controls::{Availability, Control, Failure as ControlFailure, Reading},
     model::{
@@ -11,37 +11,85 @@ use crate::{
     system::{Capability, Failure, Operation},
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Locale {
-    Ru,
-    En,
-    Es,
+pub use alcard_l10n::Locale;
+
+/// Labels that depend on Shell state; language identity belongs to alcard-l10n.
+pub trait ShellLabels {
+    fn screen(self, screen: Screen) -> &'static str;
+    fn action(self, action: Action) -> &'static str;
+    fn quick_title(self) -> &'static str;
+    fn lock_title(self) -> &'static str;
+    fn suspend_title(self) -> &'static str;
+    fn suspend_confirm(self) -> &'static str;
+    fn suspend_warning(self) -> &'static str;
+    fn suspend_hint(self, snapshot: SleepSnapshot) -> &'static str;
+    fn suspend_unavailable(self, snapshot: SleepSnapshot) -> &'static str;
+    fn suspend_external(self) -> &'static str;
+    fn suspend_status(self, stage: SleepStage) -> &'static str;
+    fn suspend_failure(self, failure: Failure) -> &'static str;
+    fn control_title(self, control: Control) -> &'static str;
+    fn control_hint(self, control: Control, reading: Reading) -> &'static str;
+    fn controls_adjust_hint(self) -> &'static str;
+    fn controls_pending(self, refreshing: bool) -> &'static str;
+    fn controls_failure(self, failure: ControlFailure) -> &'static str;
+    fn radio_title(self, kind: RadioKind) -> &'static str;
+    fn radio_list_title(self, kind: RadioKind) -> &'static str;
+    fn radio_value(self, state: &radios::State) -> &'static str;
+    fn radio_state(self, state: &radios::State) -> &'static str;
+    fn radio_pending(self, operation: radios::Operation) -> &'static str;
+    fn radio_failure(self, failure: RadioFailure) -> &'static str;
+    fn radio_empty(self, kind: RadioKind) -> &'static str;
+    fn radio_list_hint(self) -> &'static str;
+    fn radio_details_title(self, kind: RadioKind) -> &'static str;
+    fn radio_details_text(self, entry: &radios::Entry) -> String;
+    fn radio_details_lines(self, entry: &radios::Entry) -> Vec<String>;
+    fn lock_hint(self) -> &'static str;
+    fn lock_status(self, phase: crate::locking::Phase) -> &'static str;
+    fn system_operation(self, operation: Operation) -> &'static str;
+    fn system_capability(self, capability: Capability) -> &'static str;
+    fn system_confirm(self, operation: Operation) -> &'static str;
+    fn system_refresh_hint(self) -> &'static str;
+    fn system_warning(self, operation: Operation) -> &'static str;
+    fn system_waiting(self) -> &'static str;
+    fn system_accepted(self) -> &'static str;
+    fn system_failure(self, failure: Failure) -> &'static str;
+    fn search_title(self) -> &'static str;
+    fn search_hint(self) -> &'static str;
+    fn search_empty(self) -> &'static str;
+    fn search_matches(self, count: usize) -> String;
+    fn search_clear_hint(self) -> &'static str;
+    fn search_apply_key(self) -> &'static str;
+    fn search_cancel_key(self) -> &'static str;
+    fn notification_title(self) -> &'static str;
+    fn notification_source(self) -> &'static str;
+    fn unknown_application(self) -> &'static str;
+    fn notification_expired(self) -> &'static str;
+    fn notification_unavailable(self) -> &'static str;
+    fn notification_actions(self) -> &'static str;
+    fn application_option(self, option: &ApplicationOption) -> &'static str;
+    fn notification_option(self, option: &NotificationOption) -> &str;
+    fn application_windows(self) -> &'static str;
+    fn application_details(self) -> &'static str;
+    fn window_identifier(self) -> &'static str;
+    fn launch_attempt(self) -> &'static str;
+    fn launch_phase(self, phase: LaunchPhase) -> &'static str;
+    fn window_operation(self, operation: WindowOperation) -> &'static str;
+    fn history_explanation(self) -> &'static str;
+    fn confirm_retry(self) -> &'static str;
+    fn retry_explanation(self) -> &'static str;
+    fn link(self, state: LinkState) -> &'static str;
+    fn battery(self, state: BatteryState) -> String;
+    fn running(self) -> &'static str;
+    fn closed(self) -> &'static str;
+    fn empty(self) -> &'static str;
+    fn window_manager_unavailable(self) -> &'static str;
+    fn info(self, info: InfoKind) -> &'static str;
+    fn confirm_close(self) -> &'static str;
+    fn confirm_clear(self) -> &'static str;
 }
 
-impl Locale {
-    pub fn detect() -> Self {
-        let lang = std::env::var("LC_ALL")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .or_else(|| std::env::var("LANG").ok())
-            .unwrap_or_default()
-            .to_lowercase();
-        if lang.starts_with("ru") {
-            Self::Ru
-        } else if lang.starts_with("es") {
-            Self::Es
-        } else {
-            Self::En
-        }
-    }
-    pub fn code(self) -> &'static str {
-        match self {
-            Self::Ru => "ru",
-            Self::En => "en",
-            Self::Es => "es",
-        }
-    }
-    pub fn screen(self, screen: Screen) -> &'static str {
+impl ShellLabels for Locale {
+    fn screen(self, screen: Screen) -> &'static str {
         match (self, screen) {
             (Self::Ru, Screen::Home) => "Главная",
             (Self::Ru, Screen::Recent) => "Недавние",
@@ -57,7 +105,7 @@ impl Locale {
             (_, Screen::Menu) => "Applications",
         }
     }
-    pub fn action(self, action: Action) -> &'static str {
+    fn action(self, action: Action) -> &'static str {
         match (self, action) {
             (_, Action::None) => "",
             (_, Action::Acknowledge) => "OK",
@@ -124,42 +172,42 @@ impl Locale {
             (_, Action::Select) => "Select",
         }
     }
-    pub fn quick_title(self) -> &'static str {
+    fn quick_title(self) -> &'static str {
         match self {
             Self::Ru => "Быстрые настройки",
             Self::En => "Quick settings",
             Self::Es => "Ajustes rápidos",
         }
     }
-    pub fn lock_title(self) -> &'static str {
+    fn lock_title(self) -> &'static str {
         match self {
             Self::Ru => "Заблокировать",
             Self::En => "Lock screen",
             Self::Es => "Bloquear",
         }
     }
-    pub fn suspend_title(self) -> &'static str {
+    fn suspend_title(self) -> &'static str {
         match self {
             Self::Ru => "Перейти в сон",
             Self::En => "Suspend",
             Self::Es => "Suspender",
         }
     }
-    pub fn suspend_confirm(self) -> &'static str {
+    fn suspend_confirm(self) -> &'static str {
         match self {
             Self::Ru => "Перейти в спящий режим?",
             Self::En => "Suspend the device?",
             Self::Es => "¿Suspender el dispositivo?",
         }
     }
-    pub fn suspend_warning(self) -> &'static str {
+    fn suspend_warning(self) -> &'static str {
         match self {
             Self::Ru => "Сначала экран будет заблокирован, затем система получит запрос сна. После пробуждения потребуется пароль.",
             Self::En => "Shell will lock the screen before requesting sleep. Use your password to unlock after waking.",
             Self::Es => "Shell bloqueará la pantalla antes de solicitar el reposo. Tras reactivarlo, use su contraseña para desbloquear.",
         }
     }
-    pub fn suspend_hint(self, snapshot: SleepSnapshot) -> &'static str {
+    fn suspend_hint(self, snapshot: SleepSnapshot) -> &'static str {
         match (self, snapshot.monitor, snapshot.capability) {
             (Self::Ru, MonitorState::Preparing, _) => "Система готовится ко сну",
             (Self::Es, MonitorState::Preparing, _) => "Sistema preparando el reposo",
@@ -181,7 +229,7 @@ impl Locale {
             (_, MonitorState::Ready, capability) => self.system_capability(capability),
         }
     }
-    pub fn suspend_unavailable(self, snapshot: SleepSnapshot) -> &'static str {
+    fn suspend_unavailable(self, snapshot: SleepSnapshot) -> &'static str {
         match (self, snapshot.monitor, snapshot.capability) {
             (_, MonitorState::Preparing, _) => self.suspend_external(),
             (Self::Ru, MonitorState::Connecting, _) => "Проверяем доступность сна. Повторите проверку, если ожидание затянулось.",
@@ -203,14 +251,14 @@ impl Locale {
             (_, MonitorState::Ready, Capability::Unavailable) => self.suspend_failure(Failure::Unavailable),
         }
     }
-    pub fn suspend_external(self) -> &'static str {
+    fn suspend_external(self) -> &'static str {
         match self {
             Self::Ru => "Система готовится ко сну. Shell ожидает блокировку; внешний запрос сна может продолжиться без неё.",
             Self::En => "The system is preparing to sleep. Shell is waiting for the lock; an external sleep request can proceed without it.",
             Self::Es => "El sistema prepara el reposo. Shell espera el bloqueo; una solicitud externa de reposo puede continuar sin él.",
         }
     }
-    pub fn suspend_status(self, stage: SleepStage) -> &'static str {
+    fn suspend_status(self, stage: SleepStage) -> &'static str {
         match (self, stage) {
             (Self::Ru, SleepStage::Preparing) => "Проверяем, разрешён ли сон. Отмена доступна, пока запрос не передан системе.",
             (Self::Es, SleepStage::Preparing) => "Comprobando si se permite el reposo. Puede cancelar antes de enviar la solicitud al sistema.",
@@ -233,7 +281,7 @@ impl Locale {
             (_, SleepStage::Unknown | SleepStage::Failed) => self.suspend_failure(Failure::Unknown),
         }
     }
-    pub fn suspend_failure(self, failure: Failure) -> &'static str {
+    fn suspend_failure(self, failure: Failure) -> &'static str {
         match (self, failure) {
             (Self::Ru, Failure::Unavailable) => "Служба сна недоступна. Повторите проверку позже.",
             (Self::Es, Failure::Unavailable) => "El servicio de reposo no está disponible. Vuelva a comprobarlo más tarde.",
@@ -256,7 +304,7 @@ impl Locale {
             (_, Failure::Cancelled) => self.suspend_status(SleepStage::Cancelled),
         }
     }
-    pub fn control_title(self, control: Control) -> &'static str {
+    fn control_title(self, control: Control) -> &'static str {
         match (self, control) {
             (Self::Ru, Control::Brightness) => "Яркость",
             (Self::Ru, Control::Volume) => "Громкость",
@@ -266,7 +314,7 @@ impl Locale {
             (_, Control::Volume) => "Volume",
         }
     }
-    pub fn control_hint(self, control: Control, reading: Reading) -> &'static str {
+    fn control_hint(self, control: Control, reading: Reading) -> &'static str {
         match (self, reading.availability) {
             (Self::Ru, Availability::Checking) => "Проверка устройства…",
             (Self::Es, Availability::Checking) => "Comprobando el dispositivo…",
@@ -313,14 +361,14 @@ impl Locale {
             }
         }
     }
-    pub fn controls_adjust_hint(self) -> &'static str {
+    fn controls_adjust_hint(self) -> &'static str {
         match self {
             Self::Ru => "Влево/вправо: шаг 5%",
             Self::Es => "Izq./der.: pasos del 5%",
             Self::En => "Left/Right: steps of 5%",
         }
     }
-    pub fn controls_pending(self, refreshing: bool) -> &'static str {
+    fn controls_pending(self, refreshing: bool) -> &'static str {
         match (self, refreshing) {
             (Self::Ru, true) => "Проверка устройств…",
             (Self::Ru, false) => "Изменение и проверка значения…",
@@ -330,7 +378,7 @@ impl Locale {
             (_, false) => "Changing and checking the value…",
         }
     }
-    pub fn controls_failure(self, failure: ControlFailure) -> &'static str {
+    fn controls_failure(self, failure: ControlFailure) -> &'static str {
         match (self, failure) {
             (Self::Ru, ControlFailure::Unavailable) => "Устройство недоступно",
             (Self::Ru, ControlFailure::Denied) => "Нет разрешения на изменение",
@@ -352,13 +400,13 @@ impl Locale {
             (_, ControlFailure::Invalid) => "Invalid device response",
         }
     }
-    pub fn radio_title(self, kind: RadioKind) -> &'static str {
+    fn radio_title(self, kind: RadioKind) -> &'static str {
         match kind {
             RadioKind::Wifi => "Wi-Fi",
             RadioKind::Bluetooth => "Bluetooth",
         }
     }
-    pub fn radio_list_title(self, kind: RadioKind) -> &'static str {
+    fn radio_list_title(self, kind: RadioKind) -> &'static str {
         match (self, kind) {
             (Self::Ru, RadioKind::Wifi) => "Сети Wi-Fi",
             (Self::Ru, RadioKind::Bluetooth) => "Устройства Bluetooth",
@@ -368,7 +416,7 @@ impl Locale {
             (_, RadioKind::Bluetooth) => "Bluetooth devices",
         }
     }
-    pub fn radio_value(self, state: &radios::State) -> &'static str {
+    fn radio_value(self, state: &radios::State) -> &'static str {
         if state.availability != RadioAvailability::Available {
             return "--";
         }
@@ -382,7 +430,7 @@ impl Locale {
             (_, None) => "--",
         }
     }
-    pub fn radio_state(self, state: &radios::State) -> &'static str {
+    fn radio_state(self, state: &radios::State) -> &'static str {
         match (self, state.availability) {
             (Self::Ru, RadioAvailability::Checking) => "Проверка радио…",
             (Self::Es, RadioAvailability::Checking) => "Comprobando la radio…",
@@ -409,7 +457,7 @@ impl Locale {
             },
         }
     }
-    pub fn radio_pending(self, operation: radios::Operation) -> &'static str {
+    fn radio_pending(self, operation: radios::Operation) -> &'static str {
         match (self, operation) {
             (Self::Ru, radios::Operation::Refresh) => "Проверка радио…",
             (Self::Es, radios::Operation::Refresh) => "Comprobando la radio…",
@@ -425,7 +473,7 @@ impl Locale {
             (_, radios::Operation::SetPowered { powered: false, .. }) => "Turning off…",
         }
     }
-    pub fn radio_failure(self, failure: RadioFailure) -> &'static str {
+    fn radio_failure(self, failure: RadioFailure) -> &'static str {
         match (self, failure) {
             (Self::Ru, RadioFailure::Unavailable) => "Радио недоступно",
             (Self::Es, RadioFailure::Unavailable) => "Radio no disponible",
@@ -444,7 +492,7 @@ impl Locale {
             (_, RadioFailure::InvalidResponse) => "State not confirmed",
         }
     }
-    pub fn radio_empty(self, kind: RadioKind) -> &'static str {
+    fn radio_empty(self, kind: RadioKind) -> &'static str {
         match (self, kind) {
             (Self::Ru, RadioKind::Wifi) => "Сети не найдены",
             (Self::Ru, RadioKind::Bluetooth) => "Устройства не найдены",
@@ -454,14 +502,14 @@ impl Locale {
             (_, RadioKind::Bluetooth) => "No devices found",
         }
     }
-    pub fn radio_list_hint(self) -> &'static str {
+    fn radio_list_hint(self) -> &'static str {
         match self {
             Self::Ru => "4: сведения; 7: обновить",
             Self::Es => "4: detalles; 7: actualizar",
             Self::En => "4: details; 7: refresh",
         }
     }
-    pub fn radio_details_title(self, kind: RadioKind) -> &'static str {
+    fn radio_details_title(self, kind: RadioKind) -> &'static str {
         match (self, kind) {
             (Self::Ru, RadioKind::Wifi) => "Сеть Wi-Fi",
             (Self::Ru, RadioKind::Bluetooth) => "Устройство Bluetooth",
@@ -471,7 +519,7 @@ impl Locale {
             (_, RadioKind::Bluetooth) => "Bluetooth device",
         }
     }
-    pub fn radio_details_text(self, entry: &radios::Entry) -> String {
+    fn radio_details_text(self, entry: &radios::Entry) -> String {
         // These are display strings from untrusted network/device names. They
         // never become terminal escapes or commands, and the full bounded ID
         // remains readable in the scrolled details even when a row is shortened.
@@ -494,17 +542,17 @@ impl Locale {
             clean(&entry.detail)
         )
     }
-    pub fn radio_details_lines(self, entry: &radios::Entry) -> Vec<String> {
+    fn radio_details_lines(self, entry: &radios::Entry) -> Vec<String> {
         crate::model::wrap_text(&self.radio_details_text(entry), crate::modal::MODAL_COLUMNS)
     }
-    pub fn lock_hint(self) -> &'static str {
+    fn lock_hint(self) -> &'static str {
         match self {
             Self::Ru => "Пароль текущего пользователя",
             Self::En => "Current user's password",
             Self::Es => "Contraseña del usuario",
         }
     }
-    pub fn lock_status(self, phase: crate::locking::Phase) -> &'static str {
+    fn lock_status(self, phase: crate::locking::Phase) -> &'static str {
         use crate::locking::Phase;
         match (self, phase) {
             (Self::Ru, Phase::Starting) => "Ожидаем подтверждение блокировки. Пароль вводится на отдельном экране.",
@@ -521,7 +569,7 @@ impl Locale {
             (Self::Es, Phase::Uncertain) => "No se ha confirmado el estado del bloqueo. No se repitió la solicitud. Cerrar esta tarjeta no desbloquea la sesión.",
         }
     }
-    pub fn system_operation(self, operation: Operation) -> &'static str {
+    fn system_operation(self, operation: Operation) -> &'static str {
         match (self, operation) {
             (Self::Ru, Operation::Logout) => "Выйти из сеанса",
             (Self::Ru, Operation::Reboot) => "Перезагрузить",
@@ -534,7 +582,7 @@ impl Locale {
             (_, Operation::PowerOff) => "Power off",
         }
     }
-    pub fn system_capability(self, capability: Capability) -> &'static str {
+    fn system_capability(self, capability: Capability) -> &'static str {
         match (self, capability) {
             (Self::Ru, Capability::Checking) => "Проверка доступности…",
             (Self::Ru, Capability::Allowed) => "Доступно",
@@ -559,7 +607,7 @@ impl Locale {
             (_, Capability::Unavailable) => "Service unavailable",
         }
     }
-    pub fn system_confirm(self, operation: Operation) -> &'static str {
+    fn system_confirm(self, operation: Operation) -> &'static str {
         match (self, operation) {
             (Self::Ru, Operation::Logout) => "Выйти из сеанса?",
             (Self::Ru, Operation::Reboot) => "Перезагрузить устройство?",
@@ -572,14 +620,14 @@ impl Locale {
             (_, Operation::PowerOff) => "Power off the device?",
         }
     }
-    pub fn system_refresh_hint(self) -> &'static str {
+    fn system_refresh_hint(self) -> &'static str {
         match self {
             Self::Ru => "Повтор проверит доступность снова.",
             Self::En => "Retry checks availability again.",
             Self::Es => "Reint. vuelve a comprobar la disponibilidad.",
         }
     }
-    pub fn system_warning(self, operation: Operation) -> &'static str {
+    fn system_warning(self, operation: Operation) -> &'static str {
         match (self, operation) {
             (Self::Ru, Operation::Logout) => "Текущий сеанс завершится. Приложения могут закрыться, несохранённые данные могут быть потеряны.",
             (Self::Ru, Operation::Reboot) => "Устройство перезагрузится. Приложения могут закрыться, несохранённые данные могут быть потеряны.",
@@ -592,21 +640,21 @@ impl Locale {
             (_, Operation::PowerOff) => "The device will power off. Applications may close and unsaved changes may be lost.",
         }
     }
-    pub fn system_waiting(self) -> &'static str {
+    fn system_waiting(self) -> &'static str {
         match self {
             Self::Ru => "Ожидание ответа системы. Если требуется пароль, появится отдельное окно подтверждения прав.",
             Self::En => "Waiting for the system. If a password is required, a separate authentication window will appear.",
             Self::Es => "Esperando la respuesta del sistema. Si se necesita una contraseña, aparecerá una ventana de autenticación.",
         }
     }
-    pub fn system_accepted(self) -> &'static str {
+    fn system_accepted(self) -> &'static str {
         match self {
             Self::Ru => "Запрос принят системой. Завершение действия ещё не подтверждено.",
             Self::En => "The system accepted the request. Completion has not yet been confirmed.",
             Self::Es => "El sistema aceptó la solicitud. Aún no se ha confirmado que la acción haya terminado.",
         }
     }
-    pub fn system_failure(self, failure: Failure) -> &'static str {
+    fn system_failure(self, failure: Failure) -> &'static str {
         match (self, failure) {
             (Self::Ru, Failure::Unavailable) => "Служба системных действий недоступна. Попробуйте позже.",
             (Self::Ru, Failure::Denied) => "Система не разрешила это действие.",
@@ -631,98 +679,98 @@ impl Locale {
             (_, Failure::Unknown) => "The result of the request is unknown.",
         }
     }
-    pub fn search_title(self) -> &'static str {
+    fn search_title(self) -> &'static str {
         match self {
             Self::Ru => "Поиск приложений",
             Self::En => "Search apps",
             Self::Es => "Buscar aplicaciones",
         }
     }
-    pub fn search_hint(self) -> &'static str {
+    fn search_hint(self) -> &'static str {
         match self {
             Self::Ru => "Имя или ID приложения",
             Self::En => "Name or app ID",
             Self::Es => "Nombre o ID de la app",
         }
     }
-    pub fn search_empty(self) -> &'static str {
+    fn search_empty(self) -> &'static str {
         match self {
             Self::Ru => "Приложения не найдены",
             Self::En => "No matching apps",
             Self::Es => "No hay coincidencias",
         }
     }
-    pub fn search_matches(self, count: usize) -> String {
+    fn search_matches(self, count: usize) -> String {
         match self {
             Self::Ru => format!("Найдено: {count}"),
             Self::En => format!("Matches: {count}"),
             Self::Es => format!("Resultados: {count}"),
         }
     }
-    pub fn search_clear_hint(self) -> &'static str {
+    fn search_clear_hint(self) -> &'static str {
         match self {
             Self::Ru => "Ctrl+U: очистить",
             Self::En => "Ctrl+U: clear",
             Self::Es => "Ctrl+U: borrar",
         }
     }
-    pub fn search_apply_key(self) -> &'static str {
+    fn search_apply_key(self) -> &'static str {
         match self {
             Self::Ru => "Enter: Готово",
             Self::En => "Enter: Apply",
             Self::Es => "Enter: Aplicar",
         }
     }
-    pub fn search_cancel_key(self) -> &'static str {
+    fn search_cancel_key(self) -> &'static str {
         match self {
             Self::Ru => "Esc: Отмена",
             Self::En => "Esc: Cancel",
             Self::Es => "Esc: Anular",
         }
     }
-    pub fn notification_title(self) -> &'static str {
+    fn notification_title(self) -> &'static str {
         match self {
             Self::Ru => "Уведомление",
             Self::En => "Notification",
             Self::Es => "Aviso",
         }
     }
-    pub fn notification_source(self) -> &'static str {
+    fn notification_source(self) -> &'static str {
         match self {
             Self::Ru => "От",
             Self::En => "From",
             Self::Es => "De",
         }
     }
-    pub fn unknown_application(self) -> &'static str {
+    fn unknown_application(self) -> &'static str {
         match self {
             Self::Ru => "Неизвестное приложение",
             Self::En => "Unknown application",
             Self::Es => "Aplicación desconocida",
         }
     }
-    pub fn notification_expired(self) -> &'static str {
+    fn notification_expired(self) -> &'static str {
         match self {
             Self::Ru => "Закрыто; действия недоступны",
             Self::En => "Closed; actions unavailable",
             Self::Es => "Cerrado; acciones no disponibles",
         }
     }
-    pub fn notification_unavailable(self) -> &'static str {
+    fn notification_unavailable(self) -> &'static str {
         match self {
             Self::Ru => "Служба уведомлений недоступна",
             Self::En => "Notification service unavailable",
             Self::Es => "Servicio de avisos no disponible",
         }
     }
-    pub fn notification_actions(self) -> &'static str {
+    fn notification_actions(self) -> &'static str {
         match self {
             Self::Ru => "Действия уведомления",
             Self::En => "Notification actions",
             Self::Es => "Acciones del aviso",
         }
     }
-    pub fn application_option(self, option: &ApplicationOption) -> &'static str {
+    fn application_option(self, option: &ApplicationOption) -> &'static str {
         match (self, option) {
             (Self::Ru, ApplicationOption::Close) => "Закрыть окно",
             (Self::Es, ApplicationOption::Close) => "Cerrar ventana",
@@ -734,7 +782,7 @@ impl Locale {
             (_, ApplicationOption::Details) => self.application_details(),
         }
     }
-    pub fn notification_option(self, option: &NotificationOption) -> &str {
+    fn notification_option(self, option: &NotificationOption) -> &str {
         match (self, option) {
             (_, NotificationOption::Invoke { key, label }) => {
                 if !label.is_empty() {
@@ -756,35 +804,35 @@ impl Locale {
             (_, NotificationOption::Retry) => "Reconnect to service",
         }
     }
-    pub fn application_windows(self) -> &'static str {
+    fn application_windows(self) -> &'static str {
         match self {
             Self::Ru => "Окна",
             Self::Es => "Ventanas",
             Self::En => "Windows",
         }
     }
-    pub fn application_details(self) -> &'static str {
+    fn application_details(self) -> &'static str {
         match self {
             Self::Ru => "Сведения",
             Self::Es => "Detalles",
             Self::En => "Details",
         }
     }
-    pub fn window_identifier(self) -> &'static str {
+    fn window_identifier(self) -> &'static str {
         match self {
             Self::Ru => "Окно",
             Self::Es => "Ventana",
             Self::En => "Window",
         }
     }
-    pub fn launch_attempt(self) -> &'static str {
+    fn launch_attempt(self) -> &'static str {
         match self {
             Self::Ru => "Попытка",
             Self::Es => "Intento",
             Self::En => "Attempt",
         }
     }
-    pub fn launch_phase(self, phase: LaunchPhase) -> &'static str {
+    fn launch_phase(self, phase: LaunchPhase) -> &'static str {
         match (self, phase) {
             (Self::Ru, LaunchPhase::Starting) => "Запускается…",
             (Self::Ru, LaunchPhase::Unconfirmed) => "Окно не обнаружено",
@@ -797,7 +845,7 @@ impl Locale {
             (_, LaunchPhase::Failed) => "Launch failed",
         }
     }
-    pub fn window_operation(self, operation: WindowOperation) -> &'static str {
+    fn window_operation(self, operation: WindowOperation) -> &'static str {
         match (self, operation) {
             (Self::Ru, WindowOperation::Activating) => "Переход к окну…",
             (Self::Ru, WindowOperation::Closing) => "Закрывается…",
@@ -813,7 +861,7 @@ impl Locale {
             (_, WindowOperation::CloseUnconfirmed) => "Close unconfirmed",
         }
     }
-    pub fn history_explanation(self) -> &'static str {
+    fn history_explanation(self) -> &'static str {
         match self {
             Self::Ru => {
                 "Запуск открывает приложение. Содержимое закрытого окна не восстанавливается."
@@ -826,21 +874,21 @@ impl Locale {
             }
         }
     }
-    pub fn confirm_retry(self) -> &'static str {
+    fn confirm_retry(self) -> &'static str {
         match self {
             Self::Ru => "Повторить запуск?",
             Self::Es => "¿Reintentar inicio?",
             Self::En => "Retry launch?",
         }
     }
-    pub fn retry_explanation(self) -> &'static str {
+    fn retry_explanation(self) -> &'static str {
         match self {
             Self::Ru => "Процесс может ещё работать. Повтор может открыть вторую копию.",
             Self::Es => "El proceso puede seguir activo. Reintentar puede abrir otra copia.",
             Self::En => "The process may still be running. Retrying may open a second copy.",
         }
     }
-    pub fn link(self, state: LinkState) -> &'static str {
+    fn link(self, state: LinkState) -> &'static str {
         match (self, state) {
             (Self::Ru, LinkState::Unknown) => "нет данных",
             (Self::Ru, LinkState::Absent) => "нет устройства",
@@ -868,7 +916,7 @@ impl Locale {
             (_, LinkState::Routed) => "connected",
         }
     }
-    pub fn battery(self, state: BatteryState) -> String {
+    fn battery(self, state: BatteryState) -> String {
         let label = match self {
             Self::Ru => "Батарея",
             Self::En => "Battery",
@@ -901,35 +949,35 @@ impl Locale {
         };
         format!("{label}: {content}")
     }
-    pub fn running(self) -> &'static str {
+    fn running(self) -> &'static str {
         match self {
             Self::Ru => "Работает",
             Self::Es => "Activo",
             Self::En => "Running",
         }
     }
-    pub fn closed(self) -> &'static str {
+    fn closed(self) -> &'static str {
         match self {
             Self::Ru => "Закрыто",
             Self::Es => "Cerrado",
             Self::En => "Closed",
         }
     }
-    pub fn empty(self) -> &'static str {
+    fn empty(self) -> &'static str {
         match self {
             Self::Ru => "Пока пусто",
             Self::Es => "Sin elementos",
             Self::En => "Nothing here yet",
         }
     }
-    pub fn window_manager_unavailable(self) -> &'static str {
+    fn window_manager_unavailable(self) -> &'static str {
         match self {
             Self::Ru => "Нет доступа к окнам",
             Self::Es => "Ventanas no disponibles",
             Self::En => "Window list unavailable",
         }
     }
-    pub fn info(self, info: InfoKind) -> &'static str {
+    fn info(self, info: InfoKind) -> &'static str {
         match (self, info) {
             (Self::Ru, InfoKind::Unsupported) => "Функция ещё не доступна.",
             (Self::Ru, InfoKind::Activation) => "Не удалось перейти к окну.",
@@ -957,14 +1005,14 @@ impl Locale {
             (_, InfoKind::TargetUnavailable) => "The window is no longer available",
         }
     }
-    pub fn confirm_close(self) -> &'static str {
+    fn confirm_close(self) -> &'static str {
         match self {
             Self::Ru => "Закрыть окно?",
             Self::Es => "¿Cerrar ventana?",
             Self::En => "Close window?",
         }
     }
-    pub fn confirm_clear(self) -> &'static str {
+    fn confirm_clear(self) -> &'static str {
         match self {
             Self::Ru => "Очистить уведомления?",
             Self::Es => "¿Borrar los avisos?",

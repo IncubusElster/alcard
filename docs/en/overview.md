@@ -55,6 +55,21 @@ The [console workspace](../../rust/Cargo.toml) and the four independent graphica
 
 Graphics uses **labwc/wlroots with Pixman**, with Alcard clients built on **SCTK, tiny-skia and `wl_shm`**. PipeWire/WirePlumber belong to the Graphics user session in an OpenRC system; systemd user units are not the session mechanism. These choices are established architecture, not a list of alternative GUI frameworks.
 
+### Rust implementation map
+
+| Area | Internal responsibilities |
+| --- | --- |
+| [Hello state](../../rust/crates/alcard-setup-core/src/lib.rs) | `input.rs` owns editing/transitions, `view.rs` owns rows/softkeys, and `request.rs` validates and serializes the separate credential request |
+| [Shared settings](../../rust/crates/alcard-settings-core/src/settings.rs) | Public row/action types; `settings/inventory.rs` reads state, `settings/operation.rs` validates and runs operations, and `settings/services.rs` contains bounded service adapters |
+| [Setup backend](../../rust/apps/alcard-setupd/src/main.rs) | `apply.rs` owns firstboot provisioning, `settings.rs` owns the installed-settings allowlist, and `system_config.rs` provides shared configuration writes |
+| [Shell model](../../rust/apps/alcard-shell/src/model.rs) | Shared state/navigation with application, notification and quick-settings behavior in private `model/` modules |
+| [Shell application](../../rust/apps/alcard-shell/src/app.rs) | Event coordination with power and window handling in private `app/` modules |
+| [Shell rendering](../../rust/apps/alcard-shell/src/render.rs) | Screen composition with status indicators and quick-settings drawing in private `render/` modules |
+| [Sleep client](../../rust/apps/alcard-shell/src/sleep.rs) | Public client/state contract with login1 transport and monitoring in private `sleep/` modules |
+| [Runtime language](../../rust/crates/alcard-l10n/src/locale.rs) | One `alcard_l10n::Locale` and common automatic detection for Settings, Shell, locker and polkit-agent |
+
+Feature-specific translation text stays with its application; Settings/Hello retain their JSON catalogs. Configuration `Language::Auto` and the serialized setup-protocol language remain distinct from the resolved runtime locale. Tests live in separate test-only modules alongside the corresponding implementation.
+
 ## Repository map
 
 | Path | Purpose |

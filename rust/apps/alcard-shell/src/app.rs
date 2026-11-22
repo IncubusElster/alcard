@@ -23,6 +23,9 @@ use alcard_ui::{
 use chrono::{Local, Timelike};
 use std::time::{Duration, Instant};
 
+mod power;
+mod windows;
+
 const WINDOW_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 const BATTERY_REFRESH_TIMEOUT: Duration = Duration::from_secs(8);
 
@@ -167,6 +170,7 @@ impl Application {
             lock_journal: false,
         }
     }
+
     pub fn set_notifications(&mut self, client: notifications::Client) {
         self.notifications = Some(client);
         if self.battery_warning.is_some() {
@@ -241,631 +245,6 @@ impl Application {
         if !accepted {
             self.state.request_failed(request);
         }
-    }
-
-    pub fn set_sleep(&mut self, client: sleep::Client) {
-        self.sleep_client = Some(client);
-    }
-
-    pub fn receive_sleep(&mut self, message: sleep::Message) {
-        let effects = self.sleep_coordinator.receive(message, Instant::now());
-        self.sync_sleep_view();
-        self.apply_sleep_effects(effects);
-        if let sleep::Message::Refreshed { request, snapshot } = message {
-            if self.battery_sleep.as_ref().is_some_and(|automatic| {
-                automatic.episode == request && automatic.request.is_none()
-            }) {
-                if snapshot.monitor == sleep::MonitorState::Ready
-                    && snapshot.capability == system::Capability::Allowed
-                    && self
-                        .battery_policy
-                        .is_action_current(request, Instant::now())
-                {
-                    let Request::PrepareSuspend { request: id } =
-                        self.state.begin_battery_suspend()
-                    else {
-                        self.finish_battery_sleep(Some(system::Failure::Blocked), false);
-                        return;
-                    };
-                    self.battery_sleep
-                        .as_mut()
-                        .expect("matching battery episode")
-                        .request = Some(id);
-                    self.begin_suspend(id);
-                } else {
-                    self.finish_battery_sleep(Some(system::Failure::Unavailable), false);
-                }
-            }
-        } else if matches!(message, sleep::Message::Lost { .. }) && self.battery_sleep.is_some() {
-            self.finish_battery_sleep(Some(system::Failure::Unavailable), true);
-        }
-    }
-
-    fn sync_sleep_view(&mut self) {
-        self.dirty |= self
-            .state
-            .set_sleep_snapshot(self.sleep_coordinator.snapshot());
-        self.dirty |= self
-            .state
-            .set_sleep_progress(self.sleep_coordinator.progress());
-        let terminal = self.battery_sleep.as_ref().and_then(|automatic| {
-            self.sleep_coordinator.progress().filter(|progress| {
-                automatic.request == Some(progress.request)
-                    && matches!(
-                        progress.stage,
-                        sleep::Stage::Failed
-                            | sleep::Stage::Unknown
-                            | sleep::Stage::Cancelled
-                            | sleep::Stage::Ended
-                    )
-            })
-        });
-        if let Some(progress) = terminal {
-            let failure = progress
-                .failure
-                .filter(|failure| *failure != system::Failure::Cancelled);
-            self.finish_battery_sleep(failure, false);
-        }
-    }
-
-    fn refresh_sleep(&mut self) {
-        if let Some(client) = &self.sleep_client {
-            // A busy observer can coalesce/refuse this read-only request.
-            // Retain its established context; never reconnect and mutate.
-            let _ = client.refresh();
-            self.sync_sleep_view();
-        } else {
-            self.receive_sleep(sleep::Message::Snapshot(sleep::Snapshot {
-                epoch: self.sleep_coordinator.snapshot().epoch,
-                capability: system::Capability::Unavailable,
-                monitor: sleep::MonitorState::Unavailable,
-                delay_ms: 0,
-            }));
-        }
-    }
-
-    fn begin_suspend(&mut self, request: u64) {
-        if !self.sleep_coordinator.begin(request, Instant::now()) {
-            self.state
-                .request_failed(Request::PrepareSuspend { request });
-            if self
-                .battery_sleep
-                .as_ref()
-                .is_some_and(|automatic| automatic.request == Some(request))
-            {
-                self.finish_battery_sleep(Some(system::Failure::Unavailable), false);
-            }
-            return;
-        }
-        if !self
-            .sleep_client
-            .as_ref()
-            .is_some_and(|client| client.prepare(request))
-        {
-            self.sleep_coordinator
-                .submission_failed(request, system::Failure::Unavailable);
-        }
-        self.sync_sleep_view();
-    }
-
-    fn cancel_suspend(&mut self, request: u64) {
-        let effects = self.sleep_coordinator.cancel(request);
-        self.apply_sleep_effects(effects);
-    }
-
-    fn apply_sleep_effects(&mut self, effects: Vec<SleepEffect>) {
-        for effect in effects {
-            match effect {
-                SleepEffect::NeedLock(purpose) => {
-                    let now = Instant::now();
-                    if let Some(state) = self
-                        .state
-                        .lock_state
-                        .filter(|state| state.phase != locking::Phase::Failed)
-                    {
-                        // Only a canonical lifecycle already observed by the
-                        // model can be reused. Presence/journal never enter here.
-                        self.sleep_coordinator.lock_started(purpose, state.id, now);
-                        self.sleep_coordinator
-                            .receive_lock(locking::Message::Changed(state));
-                        continue;
-                    }
-                    let own_request = match purpose {
-                        LockPurpose::Own(request) => Some(request),
-                        LockPurpose::External { .. } => None,
-                    };
-                    let request = self.state.begin_sleep_lock(own_request);
-                    if let Request::LockSession { request: id } = request {
-                        self.sleep_coordinator.lock_started(purpose, id, now);
-                        self.new_intent();
-                        if !self.submit_lock(id) {
-                            self.sleep_coordinator.lock_failed(purpose);
-                            if let (Some(client), Some(request)) = (&self.sleep_client, own_request)
-                            {
-                                client.cancel(request);
-                            }
-                        }
-                    } else {
-                        self.sleep_coordinator.lock_failed(purpose);
-                        if let (Some(client), Some(request)) = (&self.sleep_client, own_request) {
-                            client.cancel(request);
-                        }
-                    }
-                }
-                SleepEffect::Commit {
-                    request,
-                    epoch,
-                    permit,
-                } => {
-                    let permit = if self
-                        .battery_sleep
-                        .as_ref()
-                        .is_some_and(|automatic| automatic.request == Some(request))
-                    {
-                        let Some(observation) = self.battery_observation else {
-                            permit.revoke();
-                            self.finish_battery_sleep(Some(system::Failure::Unavailable), true);
-                            continue;
-                        };
-                        // Worker-side expiry remains effective if the UI stops
-                        // dispatching while login1 preflight is still pending.
-                        permit.until(observation.observed_at + battery::MAX_SAMPLE_AGE)
-                    } else {
-                        permit
-                    };
-                    if !self
-                        .sleep_client
-                        .as_ref()
-                        .is_some_and(|client| client.commit(request, epoch, permit))
-                    {
-                        self.sleep_coordinator
-                            .submission_failed(request, system::Failure::Unavailable);
-                        if let Some(client) = &self.sleep_client {
-                            client.cancel(request);
-                        }
-                    }
-                }
-                SleepEffect::ReleaseDelay {
-                    epoch,
-                    cycle,
-                    permit,
-                } => {
-                    if !self
-                        .sleep_client
-                        .as_ref()
-                        .is_some_and(|client| client.lock_ready(epoch, cycle, permit))
-                    {
-                        eprintln!("Sleep delay release unavailable for the current cycle");
-                    }
-                }
-                SleepEffect::Cancel { request } => {
-                    if let Some(client) = &self.sleep_client {
-                        client.cancel(request);
-                    }
-                }
-                SleepEffect::Resume => {
-                    self.resume_requested = true;
-                    let effects = self.battery_policy.resume(Instant::now());
-                    self.apply_battery_effects(effects);
-                    self.sync_battery_journal();
-                    self.battery_refresh_requested = true;
-                    self.battery_observation = None;
-                    self.new_intent();
-                    self.banner = None;
-                    self.dirty = true;
-                }
-            }
-        }
-        self.sync_sleep_view();
-    }
-
-    /// Called only after a complete dispatch batch. A LOCKED event followed by
-    /// UNLOCKED/Uncertain in that batch cannot issue a suspend or release delay.
-    pub fn flush_sleep_intent(&mut self) {
-        let now = Instant::now();
-        let effects = self.battery_policy.tick(now);
-        self.apply_battery_effects(effects);
-        let allow_commit = self.battery_commit_ready(now);
-        let effects = if allow_commit {
-            self.sleep_coordinator.flush(now)
-        } else {
-            self.sleep_coordinator.flush_when(now, false)
-        };
-        self.sync_sleep_view();
-        self.apply_sleep_effects(effects);
-    }
-
-    pub fn take_resume_request(&mut self) -> bool {
-        std::mem::take(&mut self.resume_requested)
-    }
-
-    pub fn set_locking(&mut self, client: locking::Client) {
-        // This synchronous initial snapshot suppresses activation on the very
-        // first frame after Shell restart, before channel callbacks run.
-        self.lock_journal = client.present();
-        self.locking = Some(client);
-    }
-
-    pub fn idle_preferences(&self) -> IdlePreferences {
-        self.idle_preferences
-    }
-
-    pub fn set_idle_preferences(&mut self, preferences: IdlePreferences) {
-        self.idle_preferences = preferences;
-    }
-
-    pub fn set_battery_preferences(&mut self, preferences: BatteryPreferences) {
-        self.battery_preferences = preferences;
-        self.dirty |= self.state.battery_preferences != preferences;
-        self.state.battery_preferences = preferences;
-        let effects = self.battery_policy.reconfigure(preferences, Instant::now());
-        self.apply_battery_effects(effects);
-        self.battery_refresh_requested = true;
-    }
-
-    /// Restore the per-login guard before any real observations are delivered.
-    /// Failure disables automatic actions while leaving all warnings available.
-    pub fn initialize_battery_journal(&mut self) {
-        match battery_journal::Journal::from_environment() {
-            Ok(journal) => {
-                let inhibit = journal.inhibit();
-                self.battery_journal = Some(journal);
-                self.battery_journal_inhibit = inhibit;
-                if let Some(inhibit) = inhibit {
-                    let effects = self.battery_policy.restore_inhibit(inhibit, Instant::now());
-                    self.apply_battery_effects(effects);
-                }
-            }
-            Err(error) => eprintln!("Battery automatic-action journal unavailable: {error}"),
-        }
-    }
-
-    pub fn observe_battery(&mut self, observation: BatteryObservation) {
-        let now = Instant::now();
-        if self
-            .battery_observation
-            .is_none_or(|old| observation.sequence > old.sequence)
-        {
-            self.battery_observation = Some(observation);
-        }
-        let effects = self.battery_policy.observe(observation, now);
-        self.apply_battery_effects(effects);
-        self.sync_battery_journal();
-    }
-
-    fn apply_battery_effects(&mut self, effects: Vec<battery::Effect>) {
-        for effect in effects {
-            match effect {
-                battery::Effect::Warn {
-                    level,
-                    percent,
-                    episode,
-                    announce,
-                } => {
-                    let failure = self
-                        .battery_failure
-                        .filter(|(previous, _)| *previous == episode)
-                        .map(|(_, failure)| failure);
-                    if self
-                        .battery_failure
-                        .is_some_and(|(previous, _)| previous != episode)
-                    {
-                        self.battery_failure = None;
-                    }
-                    self.battery_warning = Some(BatteryWarning {
-                        level,
-                        percent,
-                        episode,
-                        failure,
-                    });
-                    self.publish_battery_warning(announce);
-                }
-                battery::Effect::ClearWarning => {
-                    self.battery_warning = None;
-                    self.publish_battery_warning(false);
-                }
-                battery::Effect::RequestSuspend { episode } => {
-                    self.request_battery_sleep(episode);
-                }
-                battery::Effect::CancelSuspend { episode } => {
-                    if self
-                        .battery_sleep
-                        .as_ref()
-                        .is_some_and(|automatic| automatic.episode == episode)
-                    {
-                        self.finish_battery_sleep(None, true);
-                    }
-                }
-            }
-        }
-    }
-
-    fn sync_battery_journal(&mut self) {
-        let desired = self.battery_policy.inhibit();
-        if desired == self.battery_journal_inhibit {
-            return;
-        }
-        let Some(journal) = &self.battery_journal else {
-            return;
-        };
-        let result = match desired {
-            None => journal.clear_if(self.battery_journal_inhibit),
-            Some(battery::Inhibit::Resume) => journal.resume().map(|_| true),
-            Some(battery::Inhibit::Attempt) => journal.latch(),
-        };
-        let actual = journal.inhibit();
-        if let Err(error) = result {
-            eprintln!("Battery automatic-action guard could not be persisted: {error}");
-            // Keep the failed guard unavailable until the next login. Never
-            // interpret a broken journal as permission to retry an action.
-            self.battery_journal = None;
-        } else {
-            self.battery_journal_inhibit = actual;
-            if actual != desired {
-                if let Some(inhibit) = actual {
-                    let effects = self.battery_policy.restore_inhibit(inhibit, Instant::now());
-                    self.apply_battery_effects(effects);
-                }
-            }
-        }
-    }
-
-    fn request_battery_sleep(&mut self, episode: u64) {
-        if self.battery_sleep.is_some()
-            || !self
-                .battery_policy
-                .is_action_current(episode, Instant::now())
-        {
-            self.battery_policy.action_finished(episode);
-            return;
-        }
-        let recorded = self.battery_journal.as_ref().map(|journal| journal.latch());
-        match recorded {
-            Some(Ok(true)) => self.battery_journal_inhibit = Some(battery::Inhibit::Attempt),
-            _ => {
-                self.battery_policy.action_finished(episode);
-                self.battery_sleep_failed(episode, system::Failure::Unavailable);
-                return;
-            }
-        }
-        self.battery_sleep = Some(BatterySleep {
-            episode,
-            request: None,
-            refresh_deadline: Instant::now() + BATTERY_REFRESH_TIMEOUT,
-            sample_barrier: None,
-        });
-        // Refresh is correlated with this episode. The eventual prepare and
-        // commit each recheck permissions; an old Allowed snapshot is not proof.
-        if !self
-            .sleep_client
-            .as_ref()
-            .is_some_and(|client| client.refresh_for(episode))
-        {
-            self.finish_battery_sleep(Some(system::Failure::Unavailable), false);
-        }
-    }
-
-    fn finish_battery_sleep(&mut self, failure: Option<system::Failure>, cancel: bool) {
-        let Some(automatic) = self.battery_sleep.take() else {
-            return;
-        };
-        self.battery_policy.action_finished(automatic.episode);
-        if cancel {
-            if let Some(request) = automatic.request {
-                self.cancel_suspend(request);
-            }
-        }
-        if let Some(failure) = failure {
-            self.battery_sleep_failed(automatic.episode, failure);
-        }
-    }
-
-    fn battery_sleep_failed(&mut self, episode: u64, failure: system::Failure) {
-        self.battery_failure = Some((episode, failure));
-        if let Some(warning) = self
-            .battery_warning
-            .as_mut()
-            .filter(|warning| warning.episode == episode)
-        {
-            warning.failure = Some(failure);
-            self.publish_battery_warning(true);
-        }
-    }
-
-    /// Start a new sensor read only after the canonical lock was observed.
-    /// The coordinator still validates the exact lock at the final flush.
-    fn battery_commit_ready(&mut self, now: Instant) -> bool {
-        let Some(automatic) = self.battery_sleep.as_ref() else {
-            return true;
-        };
-        if !self
-            .battery_policy
-            .is_action_current(automatic.episode, now)
-        {
-            self.finish_battery_sleep(None, true);
-            return false;
-        }
-        let locking = self.sleep_coordinator.progress().is_some_and(|progress| {
-            automatic.request == Some(progress.request) && progress.stage == sleep::Stage::Locking
-        });
-        if !locking {
-            return true;
-        }
-        if !self
-            .state
-            .lock_state
-            .is_some_and(|state| state.phase == locking::Phase::Locked)
-        {
-            return false;
-        }
-        let automatic = self
-            .battery_sleep
-            .as_mut()
-            .expect("known automatic request");
-        let Some(barrier) = automatic.sample_barrier else {
-            automatic.sample_barrier = Some(now);
-            self.battery_refresh_requested = true;
-            return false;
-        };
-        self.battery_observation
-            .is_some_and(|observation| observation.observed_at >= barrier)
-    }
-
-    pub fn take_battery_refresh_request(&mut self) -> bool {
-        std::mem::take(&mut self.battery_refresh_requested)
-    }
-
-    pub fn battery_refresh_failed(&mut self) {
-        self.finish_battery_sleep(Some(system::Failure::Unavailable), true);
-    }
-
-    fn publish_battery_warning(&self, announce: bool) {
-        let Some(client) = &self.notifications else {
-            return;
-        };
-        let notice = self.battery_warning.map(|warning| {
-            let critical = warning.level == battery::Level::Critical;
-            let title = if critical {
-                localized(self.state.locale, "Критический заряд", "Critical battery", "Batería crítica")
-            } else {
-                localized(self.state.locale, "Низкий заряд", "Low battery", "Batería baja")
-            };
-            let charge = localized(self.state.locale, "Заряд", "Charge", "Carga");
-            let connect = localized(self.state.locale, "Подключите питание.", "Connect a charger.", "Conecte el cargador.");
-            let mut body = format!("{charge}: {}%. {connect}", warning.percent);
-            if let Some(failure) = warning.failure.filter(|_| critical) {
-                let detail = if failure == system::Failure::Unknown {
-                    localized(self.state.locale, "Результат автосна неизвестен. Автоматический повтор отключён.", "The sleep result is unknown. Automatic retry is disabled.", "No se conoce el resultado de la suspensión. No se reintentará automáticamente.")
-                } else {
-                    localized(self.state.locale, "Автосон недоступен. Сохраните работу; при необходимости выключите устройство вручную.", "Automatic sleep is unavailable. Save your work; shut down manually if needed.", "La suspensión automática no está disponible. Guarde su trabajo; apague el equipo manualmente si hace falta.")
-                };
-                body.push('\n');
-                body.push_str(detail);
-            } else if critical && self.battery_preferences.suspend_on_critical {
-                body.push('\n');
-                body.push_str(localized(self.state.locale, "Автосон включён. Повтор после пробуждения не выполняется.", "Automatic sleep is enabled. Waking does not repeat it.", "La suspensión automática está activada. No se repite al despertar."));
-            }
-            notifications::BatteryNotice { title: title.into(), body, critical, announce }
-        });
-        if let Err(error) = client.request(notifications::Command::Battery(notice)) {
-            eprintln!("Could not record battery notification: {error}");
-        }
-    }
-
-    /// Idle belongs to the whole seat, so this path does not depend on Shell
-    /// focus and never opens Home, a status card, or a new activation request.
-    pub fn request_idle_lock(&mut self) -> bool {
-        if self.lock_inhibits_activation() || self.state.system_busy() {
-            return false;
-        }
-        let Request::LockSession { request } = self.state.begin_lock(false) else {
-            return false;
-        };
-        self.automatic_lock_request = Some(request);
-        self.new_intent();
-        self.dirty = true;
-        self.submit_lock(request)
-    }
-
-    fn submit_lock(&mut self, id: u64) -> bool {
-        self.banner = None;
-        self.launch_intent = None;
-        self.sleep_coordinator
-            .receive_lock(locking::Message::Changed(locking::State {
-                id,
-                phase: locking::Phase::Starting,
-            }));
-        let accepted = self
-            .locking
-            .as_ref()
-            .is_some_and(|client| client.lock(id, self.state.locale.code()));
-        if !accepted {
-            self.state
-                .request_failed(Request::LockSession { request: id });
-            self.report_idle_lock_failure(id);
-            self.sleep_coordinator
-                .receive_lock(locking::Message::Changed(locking::State {
-                    id,
-                    phase: locking::Phase::Failed,
-                }));
-        }
-        self.sync_sleep_view();
-        accepted
-    }
-
-    fn report_idle_lock_failure(&mut self, id: u64) {
-        if self.automatic_lock_request != Some(id) {
-            return;
-        }
-        // Consume the exact automatic request before publishing. Duplicate or
-        // late lifecycle packets must not create more notices or steal focus.
-        self.automatic_lock_request = None;
-        let title = localized(
-            self.state.locale,
-            "Автоблокировка",
-            "Automatic lock",
-            "Bloqueo automático",
-        );
-        let body = localized(
-            self.state.locale,
-            "Не удалось запустить автоблокировку. Экран остаётся включённым. Повторите блокировку вручную через меню быстрых действий.",
-            "Automatic lock could not start. The screen stays on. Retry Lock from Quick settings.",
-            "No se pudo iniciar el bloqueo automático. La pantalla permanece encendida. Vuelva a intentar el bloqueo desde el menú de acciones rápidas.",
-        );
-        self.internal_notice(title.into(), body.into());
-    }
-
-    pub fn lock_inhibits_shell(&self) -> bool {
-        self.lock_presence
-            || self.lock_journal
-            || self
-                .state
-                .lock_state
-                .is_some_and(|state| state.phase == locking::Phase::Locked)
-    }
-
-    pub fn lock_inhibits_activation(&self) -> bool {
-        // Home IPC is out-of-band; it must not queue activation while a lock
-        // is starting or after a crash with an unconfirmed compositor state.
-        self.lock_presence || self.lock_journal || self.state.lock_busy()
-    }
-
-    pub fn receive_lock(&mut self, message: locking::Message) {
-        // Revocation is immediate even for a commit already queued on the
-        // worker; a new commit is only considered by the end-of-batch flush.
-        self.sleep_coordinator.receive_lock(message);
-        let changed = match message {
-            locking::Message::Presence(active) => {
-                let changed = self.lock_presence != active;
-                self.lock_presence = active;
-                changed
-            }
-            locking::Message::Journal(active) => {
-                let changed = self.lock_journal != active;
-                self.lock_journal = active;
-                changed
-            }
-            locking::Message::Changed(state) => {
-                let changed = self.state.lock_changed(state);
-                if changed && state.phase == locking::Phase::Failed {
-                    self.report_idle_lock_failure(state.id);
-                }
-                changed
-            }
-            locking::Message::Unlocked { id } => {
-                let changed = self.state.lock_unlocked(id);
-                if changed && self.automatic_lock_request == Some(id) {
-                    self.automatic_lock_request = None;
-                }
-                changed
-            }
-        };
-        if changed {
-            self.banner = None;
-            self.launch_intent = None;
-            self.dirty = true;
-        }
-        self.sync_sleep_view();
     }
 
     pub fn receive_system(&mut self, message: system::Message) {
@@ -967,12 +346,14 @@ impl Application {
         );
         self.internal_notice(title.into(), format!("{summary}\n{error}"));
     }
+
     pub fn status(&mut self, status: StatusSnapshot) {
         if self.state.status != status {
             self.state.status = status;
             self.dirty = true;
         }
     }
+
     fn refresh_applications(&mut self) {
         self.desktop_apps = desktop::discover(self.state.locale);
         self.state.set_applications(
@@ -987,6 +368,7 @@ impl Application {
                 .collect(),
         );
     }
+
     pub fn home(&mut self) {
         if self.lock_inhibits_activation() {
             return;
@@ -1003,6 +385,7 @@ impl Application {
         self.state.go_home();
         self.dirty = true;
     }
+
     pub fn failed(&mut self, request: Request) {
         if let Request::ActivateWindow(id) | Request::CloseWindow(id) = request {
             self.window_operations
@@ -1298,128 +681,6 @@ impl Application {
             || self.state.screen == Screen::Notifications
     }
 
-    fn resolved_windows(&self) -> Vec<(u64, String)> {
-        self.state
-            .live_windows
-            .iter()
-            .map(|window| {
-                (
-                    window.id,
-                    self.state
-                        .resolve_app(&window.app_id)
-                        .map(|app| app.desktop_id.clone())
-                        .unwrap_or_default(),
-                )
-            })
-            .collect()
-    }
-
-    fn launch(&mut self, desktop_id: &str, retry: Option<u64>) -> Request {
-        let old_name = self
-            .state
-            .applications
-            .iter()
-            .find(|app| app.desktop_id == desktop_id)
-            .map(|app| app.name.clone())
-            .unwrap_or_else(|| desktop_id.to_owned());
-        self.refresh_applications();
-        let windows = self.resolved_windows();
-        let app = self.desktop_apps.iter().find(|app| app.id == desktop_id);
-        let name = app.map(|app| app.name.as_str()).unwrap_or(&old_name);
-        let spawn = || {
-            app.ok_or(desktop::LaunchError::MissingDesktopEntry)
-                .and_then(desktop::DesktopApp::launch)
-        };
-        let outcome = match retry {
-            Some(attempt) => {
-                self.launches
-                    .retry(desktop_id, name, attempt, &windows, Instant::now(), spawn)
-            }
-            None => self
-                .launches
-                .start(desktop_id, name, &windows, Instant::now(), spawn),
-        };
-        match outcome {
-            launch::Outcome::Started(attempt) | launch::Outcome::Suppressed(attempt) => {
-                self.launch_intent = Some((desktop_id.into(), attempt, self.input_generation));
-            }
-            launch::Outcome::ExistingWindow(id) => {
-                self.sync_launches();
-                return self.begin_window_operation(Request::ActivateWindow(id), Instant::now());
-            }
-            launch::Outcome::Rejected(
-                launch::Rejection::StaleAttempt | launch::Rejection::RetryUnavailable,
-            ) => {}
-            launch::Outcome::Rejected(reason) => {
-                eprintln!("Launch request rejected: {reason:?}");
-                let body = localized(self.state.locale,
-                    "Нельзя начать ещё один запуск. Дождитесь уже запущенных приложений и повторите.",
-                    "Another launch cannot start. Wait for pending applications and try again.",
-                    "No se puede iniciar otra aplicación. Espere los inicios pendientes y reintente.");
-                self.internal_notice(name.to_owned(), body.to_owned());
-                self.failed(Request::LaunchDesktop(desktop_id.to_owned()));
-            }
-        }
-        self.sync_launches();
-        Request::None
-    }
-
-    fn sync_launches(&mut self) {
-        let Some(statuses) = self.launches.take_update() else {
-            return;
-        };
-        self.launch_snapshot = statuses;
-        let statuses = self.localized_launches();
-        let changed: Vec<_> = statuses
-            .iter()
-            .filter(|status| {
-                status.phase != LaunchPhase::Starting
-                    && !self.state.launches.iter().any(|old| old == *status)
-            })
-            .cloned()
-            .collect();
-        self.state.sync_launches(statuses);
-        for status in changed {
-            self.internal_notice(status.name.clone(), status.reason.clone());
-            let same_intent =
-                self.launch_intent
-                    .as_ref()
-                    .is_some_and(|(id, attempt, generation)| {
-                        id == &status.desktop_id
-                            && *attempt == status.attempt
-                            && *generation == self.input_generation
-                    });
-            if self.focused
-                && same_intent
-                && !self.authentication_active
-                && !self.lock_inhibits_shell()
-                && !self.state.modal_active()
-            {
-                self.state
-                    .show_launch_error(&status.desktop_id, status.attempt);
-                self.banner = None;
-            }
-        }
-        self.dirty = true;
-    }
-
-    fn localized_launches(&self) -> Vec<LaunchStatus> {
-        self.launch_snapshot
-            .iter()
-            .map(|status| LaunchStatus {
-                desktop_id: status.desktop_id.clone(),
-                name: status.name.clone(),
-                attempt: status.attempt,
-                phase: match status.phase {
-                    launch::Phase::Starting => LaunchPhase::Starting,
-                    launch::Phase::Unconfirmed => LaunchPhase::Unconfirmed,
-                    launch::Phase::Failed(_) => LaunchPhase::Failed,
-                },
-                reason: launch_reason(self.state.locale, status.phase),
-            })
-            .collect()
-    }
-
     fn internal_notice(&self, title: String, body: String) {
         // The existing bounded worker queue is also usable while D-Bus is down.
         // A full queue is logged once here; never recursively create an error.
@@ -1431,83 +692,6 @@ impl Application {
         }
     }
 
-    fn begin_window_operation(&mut self, request: Request, now: Instant) -> Request {
-        let (id, kind) = match &request {
-            Request::ActivateWindow(id) => (*id, WindowOperation::Activating),
-            Request::CloseWindow(id) => (*id, WindowOperation::Closing),
-            _ => return Request::None,
-        };
-        if self
-            .window_operations
-            .iter()
-            .any(|operation| operation.id == id && operation.deadline.is_some())
-        {
-            return Request::None;
-        }
-        if !self.state.live_windows.iter().any(|window| window.id == id) {
-            self.failed(request);
-            return Request::None;
-        }
-        self.window_operations
-            .retain(|operation| operation.id != id);
-        self.window_operations.push(PendingWindowOperation {
-            id,
-            kind,
-            deadline: Some(now + WINDOW_RESPONSE_TIMEOUT),
-        });
-        self.sync_window_operations();
-        request
-    }
-
-    fn sync_window_operations(&mut self) {
-        self.state.sync_window_operations(
-            self.window_operations
-                .iter()
-                .map(|operation| WindowOperationStatus {
-                    id: operation.id,
-                    kind: operation.kind,
-                })
-                .collect(),
-        );
-        self.dirty = true;
-    }
-
-    fn tick_window_operations(&mut self, now: Instant) {
-        let mut expired = Vec::new();
-        for operation in &mut self.window_operations {
-            if operation.deadline.is_some_and(|deadline| now >= deadline) {
-                operation.deadline = None;
-                operation.kind = match operation.kind {
-                    WindowOperation::Activating => WindowOperation::ActivationUnconfirmed,
-                    _ => WindowOperation::CloseUnconfirmed,
-                };
-                expired.push((operation.id, operation.kind));
-            }
-        }
-        if !expired.is_empty() {
-            for (id, kind) in expired {
-                if let Some(window) = self
-                    .state
-                    .live_windows
-                    .iter()
-                    .find(|window| window.id == id)
-                {
-                    let body = if kind == WindowOperation::ActivationUnconfirmed {
-                        localized(
-                            self.state.locale,
-                            "Переключение пока не подтверждено.",
-                            "Switching to the window has not been confirmed yet.",
-                            "El cambio a la ventana aún no está confirmado.",
-                        )
-                    } else {
-                        localized(self.state.locale, "Окно ещё открыто. Возможно, приложение ожидает сохранения. Переключитесь к нему для проверки.", "The window is still open. The application may be waiting for you to save. Switch to it to check.", "La ventana sigue abierta. Quizá la aplicación espere que guarde los cambios. Ábrala para comprobarlo.")
-                    };
-                    self.internal_notice(window.title.clone(), body.to_owned());
-                }
-            }
-            self.sync_window_operations();
-        }
-    }
     pub fn receive_notification(&mut self, message: notifications::Message) {
         match message {
             notifications::Message::AuthenticationActive(active) => {
@@ -1541,6 +725,7 @@ impl Application {
         }
         self.dirty = true;
     }
+
     fn receive_snapshot(&mut self, snapshot: Snapshot) {
         let is_new = snapshot
             .latest_event
@@ -1564,38 +749,7 @@ impl Application {
             self.banner = None;
         }
     }
-    pub fn windows(&mut self, windows: Vec<WindowInfo>) {
-        if self.state.live_windows != windows {
-            self.state.sync_windows(windows);
-            self.launches.windows(&self.resolved_windows());
-            self.sync_launches();
-            let count = self.window_operations.len();
-            self.window_operations.retain(|operation| {
-                self.state
-                    .live_windows
-                    .iter()
-                    .find(|window| window.id == operation.id)
-                    .is_some_and(|window| {
-                        !(window.active
-                            && matches!(
-                                operation.kind,
-                                WindowOperation::Activating
-                                    | WindowOperation::ActivationUnconfirmed
-                            ))
-                    })
-            });
-            if count != self.window_operations.len() {
-                self.sync_window_operations();
-            }
-            self.dirty = true;
-        }
-    }
-    pub fn windows_unavailable(&mut self) {
-        self.window_operations.clear();
-        self.sync_window_operations();
-        self.state.lose_window_service();
-        self.dirty = true;
-    }
+
     pub fn banner(&self) -> Option<Banner> {
         if self.authentication_active || self.suppress_banner() {
             return None;
@@ -1616,6 +770,7 @@ impl Application {
             accent: self.state.theme.accent,
         })
     }
+
     pub fn tick(&mut self) {
         if self
             .banner
@@ -1645,6 +800,7 @@ impl Application {
             self.dirty = true;
         }
     }
+
     pub fn wait_duration(&self) -> Duration {
         let now = Local::now();
         let mut wait = Duration::from_secs(60 - u64::from(now.second()))
@@ -1684,20 +840,11 @@ impl Application {
 }
 
 pub fn resolve_locale(language: Language) -> Locale {
-    match language {
-        Language::Auto => Locale::detect(),
-        Language::En => Locale::En,
-        Language::Ru => Locale::Ru,
-        Language::Es => Locale::Es,
-    }
+    language.resolve()
 }
 
 fn localized<'a>(locale: Locale, ru: &'a str, en: &'a str, es: &'a str) -> &'a str {
-    match locale {
-        Locale::Ru => ru,
-        Locale::En => en,
-        Locale::Es => es,
-    }
+    locale.text(en, ru, es)
 }
 
 fn launch_reason(locale: Locale, phase: launch::Phase) -> String {

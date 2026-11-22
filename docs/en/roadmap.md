@@ -38,9 +38,9 @@ The next application is **GUI Settings**, separate from Shell quick settings and
 
 1. Define the GUI executable/package and launch behavior, while preserving all three installation modes.
 2. Give shared operations an explicit result/error/cancellation contract and authorization requirement. Retain the TUI doas/su adapter and connect GUI operations to the existing polkit path; do not copy the terminal application's business logic into the GUI.
-3. Consolidate runtime localization into the shared `alcard-l10n` model. JSON catalogs and the separate Shell/locker/agent language types currently coexist. This is **application-code work still to do**, distinct from the completed EN/RU documentation translation. Preserve EN/RU/ES behavior and small-screen label constraints.
-4. Split the most overloaded Shell model/app/render and sleep/setup modules along existing responsibilities when that reduces coupling for real changes. Keep independent authentication/lock processes and the five intentional lockfiles.
-5. Implement and accept the GUI with the same settings semantics, including audio-device selection and service-unavailable states. Keep Console free of GUI dependencies.
+3. Implement and accept the GUI with the same settings semantics, including audio-device selection and service-unavailable states. Keep Console free of GUI dependencies.
+
+Reuse the common `alcard_l10n::Locale` and settings operations. Keep feature-specific translations with their owning UI, preserve EN/RU/ES and small-screen label constraints, and follow the existing [module responsibilities](overview.md#rust-implementation-map). Independent authentication/lock processes and the five intentional lockfiles remain architecture boundaries.
 
 **Completion:** one shared system operation has the same validated behavior from TUI and GUI, with the correct authorization UI for each environment. Then extend the remaining forms using that established contract.
 

@@ -52,6 +52,8 @@ Hostname accepts 1–63 ASCII letters, digits or hyphens, with no leading or tra
 
 The system language choices are English, Russian and Spanish. The backend writes the validated locale into `/etc/profile.d/alcard-locale.sh`. Settings reloads its language after an operation and requests a reload of the invoking user's installed Shell. The Shell/shared configuration loader honours an explicit CLI locale first, then the system language, then the older per-user locale field or environment/default fallback. Normal Settings exposes one system-language setting, not competing per-application language selectors. Already-running third-party applications may need a new login/start to inherit the environment.
 
+Settings, Shell, locker and polkit-agent share `alcard_l10n::Locale`. Automatic fallback uses the first non-empty variable in `LC_ALL`, `LC_MESSAGES`, `LANG` order, recognizes supported language prefixes without case sensitivity and falls back to English for an unsupported value. An explicit system/CLI language still takes precedence. The JSON catalogs and application-specific labels retain EN/RU/ES text.
+
 Original US cannot be removed and stays first. RU/ES/DE can be enabled or disabled. Their letter mappings change while the original symbol layer is retained. The saved selection is `/etc/alcard-keyboards`; generated XKB settings are in `/etc/alcard/keyboard-xkb.env`. Multiple graphical layouts use Alt+Shift after the next login. The boot console remains US. On a numbered Linux VT, Settings can temporarily load one of the retained console layouts and records it in `/run/alcard-active-layout`; a terminal emulator does not expose this VT-only row. See [Fonts and keyboard](fonts-keyboard.md).
 
 ## Date and time
@@ -107,6 +109,6 @@ The shared core currently exposes a terminal command adapter. A future GUI must 
 
 - [TUI browser](../../rust/apps/alcard-settings/src/settings.rs), [desktop entry](../../scripts/hello/alcard-settings.desktop).
 - [Shared row/action model](../../rust/crates/alcard-settings-core/src/settings.rs), [NetworkManager client](../../rust/crates/alcard-settings-core/src/network.rs), [pairing](../../rust/crates/alcard-settings-core/src/pairing.rs).
-- [Preferences](../../rust/crates/alcard-settings-core/src/preferences.rs), [privileged settings](../../rust/apps/alcard-setupd/src/apply.rs), [legacy network migration](../../rust/apps/alcard-setupd/src/network_upgrade.rs).
+- [Preferences](../../rust/crates/alcard-settings-core/src/preferences.rs), [shared language resolution](../../rust/crates/alcard-l10n/src/locale.rs), [privileged settings](../../rust/apps/alcard-setupd/src/settings.rs), [shared configuration writes](../../rust/apps/alcard-setupd/src/system_config.rs), [legacy network migration](../../rust/apps/alcard-setupd/src/network_upgrade.rs).
 
 Current NetworkManager/TUI runtime operations, cancellation, authentication routes and persistence require focused installed-system acceptance. Parser, argument and rendering tests do not establish all service behavior. See [Testing](testing.md) and [Current status](status.md).

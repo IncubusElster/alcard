@@ -13,6 +13,7 @@ publish = false
 resolver = "2"
 
 [dependencies]
+alcard-l10n = { path = "../../crates/alcard-l10n" }
 alcard-settings-core = { path = "../../crates/alcard-settings-core" }
 smithay-client-toolkit = { version = "=0.21.1", default-features = false, features = ["calloop", "xkbcommon"] }
 tiny-skia = { version = "=0.12.0", default-features = false, features = ["std", "simd"] }

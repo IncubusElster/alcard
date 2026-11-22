@@ -1,4 +1,4 @@
-//! Sensitive first-boot credentials, kept exclusively in RAM at H3.
+//! Sensitive firstboot credentials, kept exclusively in zeroizing RAM buffers.
 //! Do not derive Debug, Clone, Serialize, or expose plaintext getters.
 use zeroize::Zeroizing;
 

@@ -1,4 +1,4 @@
-//! Console settings summary and first-time Alpine setup.
+//! Ratatui Settings and first-time Alpine setup.
 //! Privileged provisioning is confined to a separate root-only subprocess.
 mod firstboot;
 mod network;
@@ -149,19 +149,7 @@ fn map_key(key: KeyEvent) -> Option<Key> {
 }
 
 fn cli_locale() -> Locale {
-    let value = ["LC_ALL", "LC_MESSAGES", "LANG"]
-        .iter()
-        .filter_map(|key| std::env::var(key).ok())
-        .find(|v| !v.is_empty())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if value.starts_with("ru") {
-        Locale::Ru
-    } else if value.starts_with("es") {
-        Locale::Es
-    } else {
-        Locale::En
-    }
+    Locale::detect()
 }
 
 #[derive(Clone, Copy)]

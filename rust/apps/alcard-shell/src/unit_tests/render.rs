@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    indicators::{battery_icon, network_icon},
+    *,
+};
 use crate::{controls, i18n::Locale, model::ControlsRequest};
 fn image() -> Pixmap {
     Pixmap::new(WIDTH as u32, HEIGHT as u32).unwrap()

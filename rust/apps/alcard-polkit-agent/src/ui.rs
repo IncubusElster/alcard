@@ -1,36 +1,8 @@
 //! Credential UI state. Only the native worker may open a challenge or permit retry.
 use crate::protocol::{plain, Command, Event, Identity, Secret};
 
-#[derive(Clone, Copy, Default)]
-pub enum Language {
-    #[default]
-    En,
-    Ru,
-    Es,
-}
-impl Language {
-    pub fn detect() -> Self {
-        let locale = std::env::var("LC_ALL")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .or_else(|| std::env::var("LANG").ok())
-            .unwrap_or_default();
-        if locale.starts_with("ru") {
-            Self::Ru
-        } else if locale.starts_with("es") {
-            Self::Es
-        } else {
-            Self::En
-        }
-    }
-    pub fn text(self, en: &'static str, ru: &'static str, es: &'static str) -> &'static str {
-        match self {
-            Self::En => en,
-            Self::Ru => ru,
-            Self::Es => es,
-        }
-    }
-}
+pub use alcard_l10n::Locale as Language;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
     Choosing,

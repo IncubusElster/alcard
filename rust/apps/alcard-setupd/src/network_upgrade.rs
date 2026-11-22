@@ -1,6 +1,6 @@
 //! Import the single profile produced by previous Alcard Hello releases.
 //! Keep the original files. OpenRC switches owners at the next boot.
-use crate::apply::atomic_write;
+use crate::system_config::atomic_write;
 use std::{
     fs, io,
     os::unix::fs::{MetadataExt, PermissionsExt},

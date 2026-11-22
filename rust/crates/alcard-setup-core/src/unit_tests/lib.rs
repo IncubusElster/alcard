@@ -1,4 +1,7 @@
 use super::*;
+use crate::secrets::Invalid;
+use alcard_input::Intent;
+use alcard_l10n::tr;
 
 #[test]
 fn six_ordered_screens() {
@@ -114,7 +117,7 @@ fn password_edit_is_enabled_but_apply_is_still_disabled() {
     let mut w = Wizard::new();
     w.step = Step::Account;
     w.focus = 2;
-    assert!(w.softkeys()[1].enabled); // password input enabled in H3
+    assert!(w.softkeys()[1].enabled); // The account page allows password editing.
     w.step = Step::Finish;
     assert!(!w.softkeys()[0].enabled);
     w.handle(Intent::Soft(0));

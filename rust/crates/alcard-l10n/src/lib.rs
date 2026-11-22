@@ -1,30 +1,8 @@
-//! One shared source for every displayed UI string. No translated text in Rust.
+//! Shared UI language identity and embedded Settings/Hello catalogs.
 use std::{collections::BTreeMap, sync::OnceLock};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Locale {
-    En,
-    Ru,
-    Es,
-}
-
-impl Locale {
-    pub const ALL: [Locale; 3] = [Locale::En, Locale::Ru, Locale::Es];
-    pub const fn code(self) -> &'static str {
-        match self {
-            Self::En => "en",
-            Self::Ru => "ru",
-            Self::Es => "es",
-        }
-    }
-    pub const fn name_key(self) -> &'static str {
-        match self {
-            Self::En => "language.en",
-            Self::Ru => "language.ru",
-            Self::Es => "language.es",
-        }
-    }
-}
+mod locale;
+pub use locale::Locale;
 
 type Catalog = BTreeMap<String, String>;
 static EN: OnceLock<Catalog> = OnceLock::new();

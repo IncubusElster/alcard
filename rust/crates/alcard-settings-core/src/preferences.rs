@@ -99,6 +99,17 @@ pub enum Language {
 }
 
 impl Language {
+    /// Resolve the configured choice after CLI/system/user precedence is applied.
+    pub fn resolve(self) -> alcard_l10n::Locale {
+        use alcard_l10n::Locale;
+        match self {
+            Self::Auto => Locale::detect(),
+            Self::En => Locale::En,
+            Self::Ru => Locale::Ru,
+            Self::Es => Locale::Es,
+        }
+    }
+
     pub fn parse(value: &str) -> Result<Self, String> {
         match value {
             "auto" => Ok(Self::Auto),

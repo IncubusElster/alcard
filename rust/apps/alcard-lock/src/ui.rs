@@ -4,72 +4,40 @@ use crate::{
     secret::Secret,
 };
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Language {
-    #[default]
-    En,
-    Ru,
-    Es,
-}
+pub use alcard_l10n::Locale as Language;
 
-impl Language {
-    pub fn detect() -> Self {
-        let value = std::env::var("LC_ALL")
-            .ok()
-            .filter(|value| !value.is_empty())
-            .or_else(|| std::env::var("LANG").ok())
-            .unwrap_or_default()
-            .to_lowercase();
-        if value.starts_with("ru") {
-            Self::Ru
-        } else if value.starts_with("es") {
-            Self::Es
-        } else {
-            Self::En
-        }
-    }
-
-    pub fn text(self, en: &'static str, ru: &'static str, es: &'static str) -> &'static str {
-        match self {
-            Self::En => en,
-            Self::Ru => ru,
-            Self::Es => es,
-        }
-    }
-
-    pub fn failure(self, failure: Failure) -> &'static str {
-        match failure {
-            Failure::Denied => self.text(
-                "Authentication failed. Try again.",
-                "Пароль не принят. Попробуйте снова.",
-                "No se pudo verificar. Inténtalo de nuevo.",
-            ),
-            Failure::Cancelled => self.text(
-                "Session remains locked.",
-                "Сеанс остаётся заблокирован.",
-                "La sesión sigue bloqueada.",
-            ),
-            Failure::Timeout => self.text(
-                "Verification timed out. Try again.",
-                "Время проверки истекло. Повторите вход.",
-                "La verificación tardó demasiado. Reintenta.",
-            ),
-            Failure::Unavailable => self.text(
-                "Password verification is unavailable.",
-                "Проверка пароля недоступна.",
-                "La verificación no está disponible.",
-            ),
-            Failure::AccountDenied => self.text(
-                "This account cannot be unlocked.",
-                "Вход для этой учётной записи недоступен.",
-                "No se permite acceder a esta cuenta.",
-            ),
-            Failure::IdentityChanged => self.text(
-                "Account identity changed. Session stays locked.",
-                "Пользователь изменился. Сеанс заблокирован.",
-                "Cambió la identidad. La sesión sigue bloqueada.",
-            ),
-        }
+fn failure_text(language: Language, failure: Failure) -> &'static str {
+    match failure {
+        Failure::Denied => language.text(
+            "Authentication failed. Try again.",
+            "Пароль не принят. Попробуйте снова.",
+            "No se pudo verificar. Inténtalo de nuevo.",
+        ),
+        Failure::Cancelled => language.text(
+            "Session remains locked.",
+            "Сеанс остаётся заблокирован.",
+            "La sesión sigue bloqueada.",
+        ),
+        Failure::Timeout => language.text(
+            "Verification timed out. Try again.",
+            "Время проверки истекло. Повторите вход.",
+            "La verificación tardó demasiado. Reintenta.",
+        ),
+        Failure::Unavailable => language.text(
+            "Password verification is unavailable.",
+            "Проверка пароля недоступна.",
+            "La verificación no está disponible.",
+        ),
+        Failure::AccountDenied => language.text(
+            "This account cannot be unlocked.",
+            "Вход для этой учётной записи недоступен.",
+            "No se permite acceder a esta cuenta.",
+        ),
+        Failure::IdentityChanged => language.text(
+            "Account identity changed. Session stays locked.",
+            "Пользователь изменился. Сеанс заблокирован.",
+            "Cambió la identidad. La sesión sigue bloqueada.",
+        ),
     }
 }
 
@@ -223,7 +191,7 @@ impl Form {
         self.secret.clear();
         self.attempt = None;
         self.phase = Phase::Unavailable;
-        self.notice = language.failure(failure).into();
+        self.notice = failure_text(language, failure).into();
         self.error = true;
     }
 
@@ -283,7 +251,7 @@ impl Form {
                     Err(failure) => {
                         self.attempt = None;
                         self.phase = Phase::Idle;
-                        self.notice = language.failure(failure).into();
+                        self.notice = failure_text(language, failure).into();
                         self.error = failure != Failure::Cancelled;
                     }
                 }

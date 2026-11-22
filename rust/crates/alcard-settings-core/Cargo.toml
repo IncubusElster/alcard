@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+alcard-l10n = { path = "../alcard-l10n" }
 serde_json = "1.0"
 toml = "1.2.1"
 toml_edit = "0.25"

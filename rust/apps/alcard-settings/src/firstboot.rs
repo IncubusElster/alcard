@@ -1,4 +1,4 @@
-//! Explicit firstboot apply path for a dedicated Alpine/QEMU guest.
+//! Explicit firstboot apply path for an armed Alpine installation.
 //! No privilege escalation: must already be root, and backend must verify
 //! Alpine + root-owned firstboot marker before consuming the secret frame.
 use alcard_setup_core::Wizard;

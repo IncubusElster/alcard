@@ -10,7 +10,18 @@ import sys
 root = Path(__file__).resolve().parents[1]
 app = root / 'rust/apps/alcard-shell'
 errors = []
-source = '\n'.join(p.read_text() for p in (app / 'src').glob('*.rs'))
+
+
+def production_source(project):
+    """Inspect nested implementation modules as well as crate-root modules."""
+    return '\n'.join(
+        path.read_text()
+        for path in sorted((project / 'src').rglob('*.rs'))
+        if 'unit_tests' not in path.parts and path.name != 'integration.rs'
+    )
+
+
+source = production_source(app)
 for pattern in (r'\bwinit\b', r'\bsoftbuffer\b', r'\bstruct\s+Canvas\b',
                 r'\bdraw_scaled\b', r'\bEventLoopProxy\b', r'\bmemfd_create\b', r'\bnix::poll\b'):
     if re.search(pattern, source):
@@ -48,7 +59,7 @@ locker = root / 'rust/apps/alcard-lock'
 for name in ('main.rs', 'gui.rs', 'render.rs', 'ui.rs', 'authentication.rs', 'protocol.rs', 'secret.rs'):
     if not (locker / 'src' / name).is_file():
         errors.append(f'missing locker module: {name}')
-lock_source = '\n'.join(p.read_text() for p in (locker / 'src').glob('*.rs') if p.name != 'integration.rs')
+lock_source = production_source(locker)
 if lock_source.count('Connection::connect_to_env(') != 1:
     errors.append('Locker must have exactly one Wayland connection')
 lock_metadata = resolve(locker)

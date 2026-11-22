@@ -1,7 +1,7 @@
 //! Non-secret Shell dialog presentation. Actions belong exclusively to the
 //! bottom softkey row; privileged authentication remains in the polkit agent.
 use crate::{
-    i18n::Locale,
+    i18n::{Locale, ShellLabels},
     locking,
     model::{wrap_text, Dialog, SystemPhase, SystemRequest, WindowInfo},
     sleep,

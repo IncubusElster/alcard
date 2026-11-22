@@ -40,6 +40,7 @@ dependencies = [
 name = "alcard-settings-core"
 version = "0.1.0"
 dependencies = [
+ "alcard-l10n",
  "async-channel",
  "futures-lite",
  "libc",

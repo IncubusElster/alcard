@@ -112,12 +112,7 @@ fn run(arguments: Vec<String>, notify: bool) -> Result<(), Box<dyn Error>> {
     if let Some(error) = warning {
         eprintln!("Lock presentation preferences: {error}; using valid defaults");
     }
-    let language = match resolved.locale {
-        PreferenceLanguage::Auto => ui::Language::detect(),
-        PreferenceLanguage::En => ui::Language::En,
-        PreferenceLanguage::Ru => ui::Language::Ru,
-        PreferenceLanguage::Es => ui::Language::Es,
-    };
+    let language = resolved.locale.resolve();
     gui::run(language, resolved.theme, notify)
 }
 

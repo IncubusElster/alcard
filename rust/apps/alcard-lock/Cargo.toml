@@ -11,6 +11,7 @@ description = "Independent ext-session-lock client with current-user PAM authent
 resolver = "2"
 
 [dependencies]
+alcard-l10n = { path = "../../crates/alcard-l10n" }
 alcard-ui = { path = "../../crates/alcard-ui" }
 alcard-lock-state = { path = "../../crates/alcard-lock-state" }
 smithay-client-toolkit = { version = "=0.21.1", default-features = false, features = ["calloop", "xkbcommon"] }
