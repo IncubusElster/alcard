@@ -138,6 +138,51 @@ fn daemon_release_interrupts_prompt_and_ends_agent_lifetime() {
 }
 
 #[test]
+fn daemon_release_closes_prompt_before_waking_completion() {
+    use std::{
+        sync::OnceLock,
+        task::{Context, Wake, Waker},
+    };
+
+    struct CompletionWake {
+        events: Mutex<mpsc::Receiver<Event>>,
+        prompt_closed: OnceLock<bool>,
+    }
+    impl Wake for CompletionWake {
+        fn wake(self: Arc<Self>) {
+            self.wake_by_ref();
+        }
+        fn wake_by_ref(self: &Arc<Self>) {
+            // Observe the release wake directly; do not race two OS threads or
+            // acquire pending, which the releasing callback may still hold.
+            self.prompt_closed.get_or_init(|| {
+                matches!(
+                    self.events.lock().unwrap().try_recv(),
+                    Ok(Event::PromptClosed)
+                )
+            });
+        }
+    }
+
+    let (agent, events, released) = agent();
+    let observer = Arc::new(CompletionWake {
+        events: Mutex::new(events),
+        prompt_closed: OnceLock::new(),
+    });
+    let waker = Waker::from(observer.clone());
+    let mut context = Context::from_waker(&waker);
+    let mut completion = Box::pin(released.recv());
+    assert!(completion.as_mut().poll(&mut context).is_pending());
+    agent.release(message(OWNER).header()).unwrap();
+    assert!(completion.as_mut().poll(&mut context).is_ready());
+    assert_eq!(
+        observer.prompt_closed.get(),
+        Some(&true),
+        "Release woke pairing completion before publishing PromptClosed"
+    );
+}
+
+#[test]
 fn other_bus_clients_cannot_cancel_release_or_prompt() {
     let (agent, receiver, released) = agent();
     let owner = message(OWNER);

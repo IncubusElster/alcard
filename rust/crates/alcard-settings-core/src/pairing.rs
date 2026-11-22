@@ -88,12 +88,18 @@ impl Agent {
         }
         Ok(())
     }
-    fn close_prompt(&self) {
+    fn close_prompt(&self, release_agent: bool) {
         let mut pending = self.pending.lock().unwrap();
         if let Some(reply) = pending.take() {
             reply.close();
         }
         let _ = self.events.send(Event::PromptClosed);
+        if release_agent {
+            // Publish prompt closure before waking the pairing worker. Keep
+            // the same lock so ask/show cannot insert another prompt between
+            // closure and release; they recheck this flag under pending.
+            self.released.close();
+        }
     }
     async fn ask(
         &self,
@@ -145,13 +151,12 @@ impl Agent {
 impl Agent {
     fn release(&self, #[zbus(header)] h: Header<'_>) -> fdo::Result<()> {
         self.verify_owner(&h)?;
-        self.released.close();
-        self.close_prompt();
+        self.close_prompt(true);
         Ok(())
     }
     fn cancel(&self, #[zbus(header)] h: Header<'_>) -> fdo::Result<()> {
         self.verify_owner(&h)?;
-        self.close_prompt();
+        self.close_prompt(false);
         Ok(())
     }
     async fn request_pin_code(
