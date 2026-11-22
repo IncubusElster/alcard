@@ -1,9 +1,11 @@
 //! NetworkManager owns interfaces, DHCP, secrets and connection persistence.
 use std::{
     collections::BTreeSet,
-    io::{self, Write},
+    io,
     process::{Command, Stdio},
 };
+
+mod activation;
 
 pub const NMCLI: &str = "/usr/bin/nmcli";
 
@@ -104,11 +106,7 @@ pub fn connect_until(
     password: &str,
     cancel: &std::sync::atomic::AtomicBool,
 ) -> io::Result<()> {
-    use std::{
-        sync::atomic::Ordering,
-        time::{Duration, Instant},
-    };
-    if cancel.load(Ordering::Acquire) {
+    if cancel.load(std::sync::atomic::Ordering::Acquire) {
         return Err(io::Error::new(io::ErrorKind::Interrupted, "Cancelled"));
     }
 
@@ -118,42 +116,7 @@ pub fn connect_until(
             "invalid Wi-Fi credentials",
         ));
     }
-    let mut child = Command::new(NMCLI)
-        .args([
-            "--wait", "25", "--ask", "device", "wifi", "connect", ssid, "ifname", iface,
-        ])
-        .env("LC_ALL", "C")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()?;
-    if let Some(mut input) = child.stdin.take() {
-        // Open and already saved networks need no input; nmcli may close its pipe early.
-        let _ = input
-            .write_all(password.as_bytes())
-            .and_then(|_| input.write_all(b"\n"));
-    }
-    let deadline = Instant::now() + Duration::from_secs(30);
-    let status = loop {
-        if cancel.load(Ordering::Acquire) || Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            query(&["device", "disconnect", iface])?;
-            return Err(io::Error::new(
-                io::ErrorKind::Interrupted,
-                "Wi-Fi activation cancelled",
-            ));
-        }
-        if let Some(status) = child.try_wait()? {
-            break status;
-        }
-        std::thread::sleep(Duration::from_millis(80));
-    };
-    if status.success() {
-        Ok(())
-    } else {
-        Err(io::Error::other("Wi-Fi activation failed"))
-    }
+    activation::connect(iface, ssid, password, cancel)
 }
 
 #[cfg(test)]

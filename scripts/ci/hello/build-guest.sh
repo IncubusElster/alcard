@@ -11,16 +11,28 @@ install -m 755 "$sysroot/usr/libexec/alcard-ci/observer.py" \
 install -m 755 "$fixture/observer.py" "$sysroot/usr/libexec/alcard-ci/observer.py"
 install -m 755 "$fixture/measure-idle-resources.py" \
     "$sysroot/usr/libexec/alcard-ci/measure-idle-resources.py"
+install -m 755 /work/scripts/ci/settings/observer.py \
+    "$sysroot/usr/libexec/alcard-ci/settings-observer.py"
 python3 -m py_compile "$sysroot/usr/libexec/alcard-ci/observer.py" \
     "$sysroot/usr/libexec/alcard-ci/observer-login.py" \
+    "$sysroot/usr/libexec/alcard-ci/settings-observer.py" \
     "$sysroot/usr/libexec/alcard-ci/measure-idle-resources.py"
+# Only this persistent acceptance guest gets an isolated virtual Ethernet
+# device. Do not let NM create a profile before Settings' Device.Connect test.
+printf '%s\n' virtio_net >> "$sysroot/etc/modules"
+install -d -m 755 "$sysroot/etc/NetworkManager/conf.d"
+printf '%s\n' '[main]' 'no-auto-default=*' \
+    > "$sysroot/etc/NetworkManager/conf.d/90-alcard-ci-settings.conf"
+chroot "$sysroot" /bin/sh -eu -c \
+    'set -- /lib/modules/*; [ "$#" = 1 ]; exec modinfo -k "${1##*/}" virtio_net' > /dev/null
 # The earlier login VMs have exited. This new writable disk belongs only to the
 # Hello scenario and persists across its reboot; no private disk is exported.
 mkfs.ext4 -F -L ALCARDHELLO -d "$sysroot" "$out/private/rootfs.ext4" \
     > "$out/evidence/ext4-hello.log" 2>&1
 printf '%s\n' \
     'Interactive Hello uses the same current signed APKs as the login scenarios.' \
-    'Only the private observer and resource sampler are added; Hello provisions the account.' \
+    'Private observers, PTY Settings driver and resource sampler are added; Hello provisions the account.' \
+    'Settings uses real NetworkManager over isolated QEMU usernet Ethernet; Wi-Fi RF is not exercised.' \
     'One writable private disk persists across both Hello boot lifetimes and is never uploaded.' \
     >> "$out/evidence/platform.txt"
 # The login modes used the first guest build. Its public receipts are already

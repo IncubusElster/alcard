@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Source checks, or current APK/runtime/login/Hello acceptance
+        description: Source checks, or current APK/runtime/login/Hello/Settings acceptance
         type: choice
         required: true
         default: source
@@ -47,6 +47,7 @@ jobs:
           python3 tools/check-docs.py 2>&1 | tee .alcard-local/ci/static/docs.log
           python3 scripts/ci/test-select.py 2>&1 | tee .alcard-local/ci/static/selection-tests.log
           python3 tools/test-package-metadata.py 2>&1 | tee .alcard-local/ci/static/metadata-tests.log
+          python3 scripts/ci/settings/test-observer.py 2>&1 | tee .alcard-local/ci/static/settings-observer-tests.log
           python3 tools/package_metadata.py manifest > .alcard-local/ci/static/package-recipes.json
 
       - name: Resolve Alpine image and toolchain cache context

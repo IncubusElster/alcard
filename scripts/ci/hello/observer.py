@@ -1,9 +1,12 @@
 #!/usr/bin/python3
-"""Private interactive-Hello observer; no provisioning or authentication RPC.
+"""Private interactive-Hello observer; no provisioning or auth-success RPC.
 
 Reuse the installed-login fixture's read-only session checks. The host releases
 the boot barrier and sends actual keyboard input to the unchanged firstboot UI.
 Only this disposable CI guest receives the wrapper, never a production APK.
+Installed Settings additionally uses a private ordinary-user PTY and explicit
+temporary guest auth/service conditions. Its own production commands apply all
+changes being tested; no fixture manufactures an authentication result.
 """
 import hashlib
 import importlib.util
@@ -22,6 +25,11 @@ spec = importlib.util.spec_from_file_location(
 base = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(base)
 base.PROGRAMS['/usr/bin/alcard-settings'] = 'hello'
+settings_spec = importlib.util.spec_from_file_location(
+    'settings_observer', Path(__file__).with_name('settings-observer.py'))
+settings_module = importlib.util.module_from_spec(settings_spec)
+settings_spec.loader.exec_module(settings_module)
+settings = settings_module.Acceptance(base)
 SENTINEL = b'Alcard interactive Hello persistence acceptance v1\n'
 SENTINEL_PATH = Path('/home/alcardci/hello-persistence.txt')
 STATE = Path('/var/lib/alcard')
@@ -157,17 +165,14 @@ def persistence_check():
             'doas': {'syntax_valid': True, 'password_required': password_required}}
 
 
-def persistence_seed():
-    assert not SENTINEL_PATH.exists()
-    # The sentinel and benign launcher are written with the real user's UID.
+def prepare_login():
+    # The inherited login gate proves agent readiness through the ordinary
+    # launcher before it returns. Prepare that harmless entry before first
+    # login, using the provisioned user's UID; do not create a login/session.
     code = '''from pathlib import Path
 import os
 os.umask(0o077)
 home = Path('/home/alcardci')
-with (home / 'hello-persistence.txt').open('xb') as stream:
-    stream.write(b'Alcard interactive Hello persistence acceptance v1\\n')
-    stream.flush()
-    os.fsync(stream.fileno())
 directory = home / '.local/share/applications'
 directory.mkdir(parents=True, exist_ok=True)
 desktop = directory / 'alcard-ci-policy.desktop'
@@ -178,7 +183,23 @@ with desktop.open('x') as stream:
     os.fsync(stream.fileno())
 '''
     result = user_command(['/usr/bin/python3', '-c', code])
-    assert result.returncode == 0, 'The logged-in user could not create persistence files'
+    assert result.returncode == 0, 'The provisioned user could not create the ordinary launcher'
+    return {'prepared': True}
+
+
+def persistence_seed():
+    assert not SENTINEL_PATH.exists()
+    assert base.session_environment().get('DBUS_SESSION_BUS_ADDRESS')
+    code = '''from pathlib import Path
+import os
+os.umask(0o077)
+with Path('/home/alcardci/hello-persistence.txt').open('xb') as stream:
+    stream.write(b'Alcard interactive Hello persistence acceptance v1\\n')
+    stream.flush()
+    os.fsync(stream.fileno())
+'''
+    result = user_command(['/usr/bin/python3', '-c', code])
+    assert result.returncode == 0, 'The logged-in user could not create the home sentinel'
     os.sync()
     return persistence_check()
 
@@ -204,9 +225,12 @@ def reboot():
 
 def dispatch(request):
     operation = request.pop('op')
+    if operation.startswith('settings-'):
+        return settings.dispatch(operation.removeprefix('settings-'), request)
     handlers = {
         'start-interactive': start_interactive, 'hello-state': hello_state,
         'state': state, 'setup-metadata': base.setup_metadata,
+        'process-state': base.process_state, 'prepare-login': prepare_login,
         'service-health': base.service_health,
         'persistence-seed': persistence_seed, 'persistence-check': persistence_check,
         'idle-resources': idle_resources, 'reboot': reboot,

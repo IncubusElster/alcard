@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One ARM runner: current source, optionally followed by fresh signed APKs,
-# installed runtime, three sequential login modes and interactive Hello.
+# installed runtime, three login modes, interactive Hello and Settings.
 # Source mode needs Docker; acceptance also needs QEMU and Python Pillow.
 # Cache only dependencies/compiler output. Never upload guest credential disks,
 # signing private keys, or the Cargo target/cache tree.
@@ -128,15 +128,18 @@ unchanged = before == after
 if not unchanged:
     result = 1
 report = {'schema': 1, 'scope': ('Native Alpine aarch64 source checks' if mode == 'source' else
-                               'Native Alpine aarch64 source, current signed APKs, installed runtime, login and interactive Hello'),
+                               'Native Alpine aarch64 source, current signed APKs, installed runtime, login, Hello and Settings'),
           'exit_code': result, 'seconds': int(time.time()) - started,
           'last_stage': stage, 'inputs_unchanged': unchanged,
           'stages': [json.loads(path.read_text()) for path in sorted((out / 'stages').glob('*.json'))],
           'not_performed': ['Alpine x86_64', 'Cardputer hardware',
+                            'physical Wi-Fi authentication/RF and Bluetooth interoperability',
+                            'real bluetoothd pairing and service authorization',
                             'physical battery discharge', 'physical kernel suspend/wake',
                             'hardware RAM/CPU/energy benchmark'] +
                            (['APK build/install', 'native authentication and login VM',
-                             'interactive Hello and idle sample'] if mode == 'source' else [])}
+                             'interactive Hello, installed Settings and idle sample',
+                             'private-bus NetworkManager/BlueZ integration'] if mode == 'source' else [])}
 (out / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
 print(f"{'PASS' if result == 0 else 'FAIL'}: Alpine aarch64 {mode}; last stage {stage}.")
 raise SystemExit(0 if result == 0 else 1)
@@ -231,6 +234,6 @@ stage 06-build-hello-guest 300 \
     docker run --rm --init --name "$CONTAINER-guest" -e ALCARD_LOGIN_VM_BUILD=1 \
     --mount "type=bind,src=$ROOT,dst=/work" \
     alpine:3.24 sh /work/scripts/ci/hello/build-guest.sh
-stage 07-interactive-hello 480 \
+stage 07-interactive-hello-settings 900 \
     python3 scripts/ci/hello/driver.py --directory "$LOGIN"
 current_stage=complete

@@ -148,6 +148,11 @@ impl Browser {
                         text: Zeroizing::default(),
                     }
                 }
+                Ok(pairing::Event::PromptClosed) => {
+                    if matches!(self.dialog, Dialog::Pair { .. }) {
+                        self.dialog = Dialog::List;
+                    }
+                }
                 Ok(pairing::Event::Done(result)) => {
                     self.pairing = None;
                     self.dialog = Dialog::List;

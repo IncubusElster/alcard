@@ -13,13 +13,12 @@ toml_edit = "0.25"
 libc = "0.2.191"
 
 [features]
-pairing = ["dep:zbus", "dep:async-channel", "dep:futures-lite"]
+pairing = ["dep:async-channel", "dep:futures-lite"]
 
 [dependencies.zbus]
 version = "6.3"
 default-features = false
 features = ["default-rt", "service", "proxy"]
-optional = true
 
 [dependencies.async-channel]
 version = "2"

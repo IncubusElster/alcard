@@ -103,6 +103,9 @@ case "${1:-run}" in
         apk info -v | sort > "$OUT/native/alpine-packages.txt"
         python3 tools/package_metadata.py manifest > "$OUT/native/package-recipes.json"
         [ "${ALCARD_CI_SOURCE_ONLY:-}" != 1 ] || exit 0
+        # Explicit protocol cases use production clients on a private bus with
+        # simulated NM/BlueZ peers, before building the fresh installed APK set.
+        python3 scripts/ci/settings-services.py "$OUT/native/settings-services" "$native_target"
         # The ignored idle/PAM test uses this exact just-tested musl executable.
         # JSON selects Cargo's output; never guess a stale cached hash filename.
         /usr/bin/cargo test --offline --locked --all-targets --no-run \

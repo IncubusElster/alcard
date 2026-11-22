@@ -15,6 +15,7 @@ Read [current status](status.md) for readiness boundaries and the current CI run
 | Static source | Script syntax, package relationships, declared assets, localization keys and configuration structure | Local Bash/sh/Python; no package installation, cargo build, privilege escalation or network in `audit-build.sh` | Compilation or actual APK dependency resolution |
 | Rust source | Formatting, unit tests, Clippy, compilation and dependency boundaries | Native toolchain; writes build/cache files and may fetch dependencies unless offline | Installed package content, real login or device behavior |
 | Process fixtures | Supervisor, dispatcher, worker and failure behavior with controlled child processes | Temporary files/processes and isolated test paths | A production login or real system service policy |
+| Private D-Bus integration | Production NetworkManager/BlueZ client requests, ownership, replies and cancellation | A private `dbus-daemon` and explicitly simulated service peers; no system bus or radio | Real daemon policy, Wi-Fi authentication or physical Bluetooth interoperability |
 | Native installed session | Fresh signed APKs, installed binaries/assets, actual compositor/PAM or isolated audio as defined by each scenario | Disposable native container and dedicated test users/services | Physical GPIO, radio, battery, kernel sleep or an entire booted system |
 | Login VM | First-run provisioning, PAM/elogind session, policy and recovery across three installation modes | One isolated aarch64 QEMU base, sequential modes and disposable credentials | CM0 boot firmware, board drivers, physical input or energy use |
 | Physical Cardputer | The actual board, display, keyboard, interfaces, power and update path | Recorded board/SKU, kernel, packages and manual observations | Other hardware revisions or untested kernel versions |
@@ -116,7 +117,7 @@ It uses a disposable rootfs under `.alcard-local/`. Read [packaging](packaging.m
 | Documentation/license-only push or pull request | Static source audit, documentation/link checks and inexpensive CI/metadata fixtures |
 | Code, build input or workflow change | The same preflight plus native Alpine source checks |
 | Manual `source` (default) | Preflight and all five native Alpine workspace checks |
-| Manual `acceptance` | Preflight, source checks once, fresh current APKs, installed runtime, three login modes and interactive Hello |
+| Manual `acceptance` | Preflight, source checks once, private D-Bus cases, fresh current APKs, installed runtime, three login modes, interactive Hello and installed Settings |
 
 Path selection includes board inputs, patches, package recipes, scripts, tools, keyboard/font data, Rust and the workflow itself. Unknown or incompletely compared paths select the source gate conservatively. Choosing a manual mode is an explicit cost decision; ordinary documentation work does not build APKs or boot a VM.
 
@@ -133,20 +134,21 @@ The inexpensive orchestration fixtures can also run locally:
 ```sh
 python3 scripts/ci/test-select.py
 python3 tools/test-package-metadata.py
+python3 scripts/ci/settings/test-observer.py
 ```
 
-They test path/mode selection and metadata parsing/drift behavior. They do not replace the application source or runtime gates.
+They test path/mode selection, metadata parsing/drift and the private terminal observer's framing and redaction. They do not replace the application source or runtime gates.
 
 ### Manual acceptance mode
 
 Select the desired ref in GitHub Actions and choose `acceptance`. All stages use the current checkout and run sequentially on the same runner:
 
-1. Perform the native Alpine source gate once.
+1. Perform the native Alpine source gate once, then explicitly run the NetworkManager/BlueZ private-bus integration cases as the ordinary build user.
 2. Build a fresh signed set of all nine user/session APKs and verify production binaries and payloads.
 3. Install that exact set into the disposable native environment and exercise [session runtime](../../scripts/check-session-runtime.sh).
 4. Stage the same signed APKs for one login guest base; do not rebuild a different set between levels.
 5. Exercise Graphics, Graphics Minimal and Console sequentially.
-6. Run interactive Hello, reboot/persistence checks and the bounded idle-measurement scenario with those same APKs through the [Hello harness](../../scripts/ci/hello).
+6. Run interactive Hello, installed Settings, reboot/persistence checks and the bounded idle-measurement scenario with those same APKs through the [Hello harness](../../scripts/ci/hello). The [Settings harness](../../scripts/ci/settings) reuses this persistent guest and its provisioned ordinary account.
 
 Native cases include real compositor/PAM and isolated PipeWire where specified; battery/backlight and mutating login1 operations use controlled fixtures. Virtual output hotplug does not establish SPI display hotplug or physical power savings. The VM uses Alpine userland on its virtual kernel, not the Cardputer firmware/BSP. See [power and audio](power-audio.md) and [security](security.md) for feature boundaries.
 
@@ -158,19 +160,15 @@ Public output is collected under `.alcard-local/ci/`, `.alcard-local/ci-packages
 
 CI output belongs to the run, not to a growing collection of committed checkpoint files. A distributed release must retain its own durable source SHA, toolchain/container identity, package inventory, binary/image hashes, notices and required source. Short-lived CI artifact retention is not a release archive.
 
-## Acceptance still needed for NetworkManager and Settings
+## NetworkManager and Settings acceptance boundaries
 
-The current source suite includes new parser, IPv4 argument and TUI rendering checks. It does not by itself demonstrate the complete installed-system contract. The next bounded acceptance should cover:
+The source suite retains parser, IPv4 argument and TUI rendering checks. The acceptance mode adds two separate integration boundaries; inspect their individual receipts before claiming a pass.
 
-- ordinary Settings after Console removes graphical/login packages;
-- NetworkManager absence, permission denial, open/protected connection, wrong credentials, saved profile, timeout/cancel and reconnect after reboot;
-- both supported administrative paths: doas and root-password/su, including refusal and cancellation;
-- profile edits, static IPv4 to DHCP and confirmed application to a device;
-- BlueZ PIN/passkey/confirmation/cancel and disappearance of the selected device;
-- restoration of the terminal after an external authentication prompt;
-- one system-language change observed by Settings, Shell and subsequent locker/polkit prompts.
+The persistent Hello guest uses an isolated virtual Ethernet interface and the actual installed NetworkManager service. Settings runs as the provisioned ordinary user on a controlling terminal. The harness prepares conditions and reads back state; the production TUI performs the requested mutations. Scenarios cover a newly created profile, activation, static IPv4/DHCP transitions, service unavailability, doas and root-password/su, refusal/Ctrl+C and terminal restoration, the shared system language, and reboot persistence. The normal three-mode login pass separately checks Console after removal of graphical packages.
 
-Software-service scenarios can use controlled virtual devices where available. Physical adapters/RF and platform-specific behavior remain device checks. If an operation is simulated, identify exactly which participant is simulated and which production code ran.
+The [private-bus runner](../../scripts/ci/settings-services.py) executes the production client/agent code against simulated NetworkManager and BlueZ peers. The cases check operation ownership, delayed replies, service/device disappearance and Bluetooth prompt/cancel lifecycles without depending on radio hardware. Their result must name the simulated participant. Passing these cases does not prove that real NetworkManager accepts a Wi-Fi password or that a physical Bluetooth device pairs.
+
+Open/protected Wi-Fi, wrong credentials, the actual adapter's saved-profile reconnect behavior, RF conditions and physical Bluetooth interoperability remain separate acceptance work. An Ethernet DHCP result is evidence for Ethernet and the exercised Settings path. It is not Wi-Fi authentication evidence. Physical adapters and platform behavior require the intended device or a separately identified radio-capable test platform.
 
 ## Physical acceptance and release evidence
 

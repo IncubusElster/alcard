@@ -25,7 +25,7 @@ Run a bounded acceptance pass on the final SHA and actual APKs after relevant fi
 - [ ] Console retains functional Settings/networking after graphical package removal.
 - [ ] Test doas and root-password/su paths, denial/cancel, and terminal restoration after external prompts.
 - [ ] Exercise NetworkManager profile creation/application, wrong password, offline/unavailable services, timeout/cancel, saved profiles and persistence after reboot.
-- [ ] Define cancellation ownership when a previous or concurrent connection exists; current cancellation can disconnect the interface, so record the expected behavior explicitly.
+- [ ] Verify operation-owned cancellation with a previous/concurrent connection, delayed activation replies and a restarted service; distinguish confirmed cleanup from an unconfirmed cancellation result.
 - [ ] Test static IPv4/DHCP transitions and read back the applied state.
 - [ ] Exercise the BlueZ agent's PIN/passkey/confirmation/cancel lifecycle and disappearance of a device.
 - [ ] Check the single system-language setting in Settings, Shell and subsequent polkit/locker requests.

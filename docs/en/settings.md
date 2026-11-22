@@ -64,11 +64,15 @@ NTP uses the installed OpenRC service, preferring `chronyd` and falling back to 
 
 ## NetworkManager
 
-NetworkManager owns Wi-Fi/Ethernet connections, DHCP, saved profiles and network secrets in Hello and installed Settings. The shared client uses fixed `/usr/bin/nmcli` with structured arguments, not command-shell interpolation. The underlying Wi-Fi implementation is NetworkManager's responsibility; Alcard no longer starts a separate standalone `wpa_supplicant`/DHCP workflow alongside it.
+NetworkManager owns Wi-Fi/Ethernet connections, DHCP, saved profiles and network secrets in Hello and installed Settings. Inventory and profile operations use fixed `/usr/bin/nmcli` with structured arguments, not command-shell interpolation. Cancellable Wi-Fi activation uses the system D-Bus API. The underlying Wi-Fi implementation is NetworkManager's responsibility; Alcard no longer starts a separate standalone `wpa_supplicant`/DHCP workflow alongside it.
 
 The Network page lists saved profiles, Wi-Fi power when a Wi-Fi device exists, and Ethernet/Wi-Fi interfaces. An interface page can activate or disconnect it and shows available GENERAL/IP4/IP6 details. Nearby Wi-Fi entries show SSID, signal and security; identical SSIDs are deduplicated. Unsupported/hidden empty SSIDs are not fabricated into selectable networks. An active scan denied by policy can fall back to NetworkManager's available AP cache.
 
-For a protected network with already sufficient permissions, the TUI collects a masked password and passes it to `nmcli --ask` through stdin. If elevated permissions are needed, the row confirms the operation and lets the terminal authorization/nmcli prompt obtain the required input. Account and Wi-Fi passwords are not placed in command arguments. Failure is reported; a successful process exit is not an Internet-connectivity test.
+For a protected network with already sufficient permissions, the TUI collects a masked password. An operation-local D-Bus secret agent supplies it only to the expected NetworkManager owner and selected connection. Existing compatible profiles are retained; a new connection uses NetworkManager's profile creation path. If elevated permissions are needed, the row confirms the operation and lets the terminal authorization/nmcli prompt obtain the required input. Account and Wi-Fi passwords are not placed in command arguments. Failure is reported; successful activation is not an Internet-connectivity test.
+
+The cancellable client tracks the exact `ActiveConnection` returned by its activation request and the unique service owner. Cancellation or timeout revokes its pending secret and requests deactivation of that object; it never disconnects by interface or saved-profile UUID. An already connected matching network is left active. A delayed reply can be cleaned up by a bounded background operation. If NetworkManager has not returned the handle or acknowledged cleanup, the caller receives an explicit unconfirmed-cancellation result rather than a guarantee that the connection stopped. A restarted daemon or a different connection is not a substitute cancellation target.
+
+Starting a new activation may replace the previous connection; cancellation does not restore it. This ownership mechanism applies to shared `network::connect_until` callers, including Hello and the ordinary authorized asynchronous Wi-Fi operation. The elevated foreground `nmcli` path continues to use terminal input and its own command lifecycle.
 
 Saved Ethernet/Wi-Fi profiles are selected by UUID. The profile page supports:
 
@@ -85,7 +89,9 @@ The upgrade hook imports only the known single Wi-Fi profile format created by o
 
 Settings uses BlueZ: power, bounded discovery and device actions through `bluetoothctl`, with a dedicated D-Bus agent for pairing. The device page shows address, name, paired/connected state, and the relevant pair/connect/disconnect/remove actions. Removing a device requires confirmation.
 
-The pairing agent supports PIN, passkey and numeric confirmation, binds requests to the selected device and the unique BlueZ service owner, and unregisters when finished. Cancellation requests `CancelPairing`; it does not claim to revoke an already completed pairing. Pairing and connection are distinct operations. A missing controller/service or denied permission is an unavailable result. Physical Bluetooth interoperability is still an acceptance item.
+The pairing agent supports PIN, passkey and numeric confirmation, binds requests to the selected device and the unique BlueZ service owner, and unregisters when finished. Daemon `Cancel` closes the outstanding prompt and resolves its pending callback; `Release` also ends the registered session. User cancellation requests `CancelPairing`; it does not claim to revoke an already completed pairing. Pairing and connection are distinct operations. A missing controller/service or denied permission is an unavailable result. Physical Bluetooth interoperability is still an acceptance item.
+
+Interactive rejections and cancellations use the BlueZ `Rejected` and `Canceled` error names. A cancellation queued during agent registration prevents a subsequent `Pair` call. Discovery and registration still use the existing per-method timeout of 90 seconds; they do not yet have immediate cancellation, and connection establishment has no separate global deadline. These pre-pair responsiveness limits are distinct from closing an active pairing prompt.
 
 The shared installed Bluetooth configuration disables automatic adapter power-on (`AutoEnable=false`). Shell quick settings can list/toggle radios but do not contain this pairing UI; see [Desktop](desktop.md).
 
