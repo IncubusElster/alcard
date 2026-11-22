@@ -23,7 +23,7 @@ def main():
             not Path('/.dockerenv').is_file() or os.uname().machine != 'aarch64'):
         raise SystemExit('Requires the ordinary build user in the native Alpine acceptance container')
     out, target = Path(sys.argv[1]), sys.argv[2]
-    if target != 'aarch64-unknown-linux-musl':
+    if target not in ('aarch64-alpine-linux-musl', 'aarch64-unknown-linux-musl'):
         raise SystemExit('Expected the native Alpine aarch64 musl target')
     out.mkdir(exist_ok=False)
     report = {
