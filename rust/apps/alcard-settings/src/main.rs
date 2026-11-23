@@ -21,10 +21,19 @@ enum NetworkUpdate {
     Inventory(Option<(String, bool)>, Option<String>, Option<Vec<String>>),
     Connected(bool),
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NetworkJobKind {
+    Inventory,
+    Connection,
+}
+struct NetworkJob {
+    updates: Receiver<NetworkUpdate>,
+    kind: NetworkJobKind,
+}
 pub(crate) struct App {
     pub wizard: Wizard,
     pub should_exit: bool,
-    network_job: Option<Receiver<NetworkUpdate>>,
+    network_job: Option<NetworkJob>,
     cancel: Arc<AtomicBool>,
 }
 
@@ -45,8 +54,25 @@ impl App {
     }
 
     fn handle(&mut self, intent: Intent) {
-        if self.network_job.is_some() {
-            if matches!(intent, Intent::Soft(4) | Intent::Quit) {
+        if let Some(job) = &self.network_job {
+            // Discovery only reads interface state; do not disable navigation
+            // while it runs. Discard its obsolete reply on leaving Network.
+            // Connection attempts retain their cancellation handshake.
+            let leave_inventory = job.kind == NetworkJobKind::Inventory
+                && self.wizard.step == alcard_setup_core::Step::Network
+                && !self.wizard.wifi_menu_open()
+                && matches!(
+                    intent,
+                    Intent::Soft(0) | Intent::Soft(2) | Intent::Soft(4) | Intent::Quit
+                );
+            if leave_inventory {
+                self.cancel.store(true, Ordering::Release);
+                self.network_job = None;
+                self.wizard.handle(intent);
+                if self.wizard.should_exit {
+                    self.should_exit = true;
+                }
+            } else if matches!(intent, Intent::Soft(4) | Intent::Quit) {
                 self.cancel.store(true, Ordering::Release);
             }
             return;
@@ -73,7 +99,7 @@ impl App {
                 || (wifi_menu_before && intent == Intent::Soft(2)));
         self.wizard.handle(intent);
         if let Some((iface, ssid, password)) = self.wizard.take_wifi_request() {
-            self.start_network(move |cancel| {
+            self.start_network(NetworkJobKind::Connection, move |cancel| {
                 NetworkUpdate::Connected(
                     network::connect(&iface, &ssid, &password, &cancel).is_ok(),
                 )
@@ -81,7 +107,7 @@ impl App {
         } else if self.wizard.step == alcard_setup_core::Step::Network
             && (!was_network || scan_requested)
         {
-            self.start_network(move |_| {
+            self.start_network(NetworkJobKind::Inventory, move |_| {
                 let (wired, wifi) = network::detect();
                 let networks = if scan_requested {
                     wifi.as_deref()
@@ -98,10 +124,11 @@ impl App {
     }
     fn start_network(
         &mut self,
+        kind: NetworkJobKind,
         task: impl FnOnce(Arc<AtomicBool>) -> NetworkUpdate + Send + 'static,
     ) {
         let (tx, rx) = mpsc::channel();
-        self.network_job = Some(rx);
+        self.network_job = Some(NetworkJob { updates: rx, kind });
         self.cancel = Arc::default();
         let cancel = self.cancel.clone();
         std::thread::spawn(move || {
@@ -109,8 +136,8 @@ impl App {
         });
     }
     fn poll_network(&mut self) {
-        let Some(rx) = &self.network_job else { return };
-        match rx.try_recv() {
+        let Some(job) = &self.network_job else { return };
+        match job.updates.try_recv() {
             Ok(NetworkUpdate::Inventory(wired, wifi, nets)) => {
                 self.wizard.set_network_interfaces(wired, wifi);
                 if let Some(n) = nets {
