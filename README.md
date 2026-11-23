@@ -4,7 +4,7 @@
 
 Alcard is a compact **Alpine Linux distribution for M5Stack Cardputer Zero**, built around OpenRC, APK, a keyboard-operated interface and a software-rendered Wayland desktop.
 
-**Development status: experimental, hardware bring-up.** The current source has automated checks; complete installed-system and physical Cardputer Zero acceptance remain separate requirements. This repository does not yet provide a supported public image or an operational Alcard APK update channel.
+**Development status: experimental, hardware bring-up.** Source, signed APKs, installed services, login modes, Hello and Settings passed the full Alpine aarch64 software acceptance on commit `164878f` ([CI evidence](https://github.com/IncubusElster/alcard/actions/runs/45096681285)). Physical Cardputer Zero acceptance remains open. This repository does not yet provide a supported public image or an operational Alcard APK update channel.
 
 ## What is implemented
 
@@ -53,7 +53,7 @@ These checks do not build APKs or boot a VM. Builds use a prepared Alpine aarch6
 
 [Alcard CI](https://github.com/IncubusElster/alcard/actions/workflows/ci.yml) is the single verification entry point. It uses one runner, runs static/documentation preflight on changes, and adds Alpine source checks when code or build inputs change. Full package, VM and Hello acceptance is an explicit manual mode with sequential stages.
 
-Read the run result for the exact commit being assessed. Source checks do not establish physical display/input, radio, audio, suspend or energy behavior. Current NetworkManager/Settings service integration and Cardputer hardware acceptance remain open.
+**Software acceptance:** [full Alpine aarch64 acceptance on `164878f`](https://github.com/IncubusElster/alcard/actions/runs/45096681285) passed with nine freshly signed APKs, Graphics/Graphics Minimal/Console login, interactive Hello, installed Settings/NetworkManager and reboot persistence. Real daemon and virtual Ethernet behavior are distinguished from simulated BlueZ peers and device-specific fixtures in the CI receipts. Later documentation-only commits do not revalidate the binary image. Physical Cardputer display/input, radio, audio, suspend, battery and energy acceptance remain open.
 
 The [current status](docs/en/status.md) separates implemented features, automated checks and release limitations. Follow the [roadmap](docs/en/roadmap.md) for remaining work and [packaging](docs/en/packaging.md) for current package inputs.
 

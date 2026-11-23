@@ -2,7 +2,7 @@
 
 **Language:** English · [Русский](../ru/status.md)
 
-> Scope: current source tree · Updated: 2026-11-22
+> Scope: current source tree · Updated: 2026-11-23
 
 **Alcard is an experimental project at the hardware bring-up stage.** The source contains the system components described below. A supported public device image and Alcard APK update channel are not available yet. Current verification results belong to the exact source and artifacts checked by [Alcard CI](https://github.com/IncubusElster/alcard/actions/workflows/ci.yml).
 
@@ -11,9 +11,9 @@
 | Area | Current implementation | Remaining acceptance or feature boundary |
 | --- | --- | --- |
 | Board and image tooling | v5/v5-lite profiles, pinned kernel/BSP, firmware, signed APK builders and regular-file image construction | Complete physical Cardputer boot/device acceptance is open |
-| Installation | Hello, administrative account policy and Graphics, Graphics Minimal, Console choices | All three login-mode VM scenarios passed with the same signed APKs; interactive Hello/Settings acceptance remains open |
-| Settings and networking | Eight Ratatui sections, shared settings core, NetworkManager profiles, BlueZ and one system-language setting | Private D-Bus lifecycle cases passed; installed authorization, real NetworkManager operations and reboot persistence still need acceptance |
-| Desktop | Application menu, Recent, notifications, themes, search and quick settings | Fresh APK runtime and the exercised login-VM paths passed; Hello language/theme/persistence scenarios and physical behavior remain separate |
+| Installation | Hello, administrative account policy and Graphics, Graphics Minimal, Console choices | All three VM login modes and interactive Hello passed on the same signed APK set; physical boot and input remain open |
+| Settings and networking | Eight Ratatui sections, shared settings core, NetworkManager profiles, BlueZ and one system-language setting | Installed doas/su, Ethernet NetworkManager profile changes, locale and reboot persistence passed in VM; physical Wi-Fi, bluetoothd and real pairing remain open |
+| Desktop | Application menu, Recent, notifications, themes, search and quick settings | Installed runtime, login modes, live locale/theme settings and persistence passed in VM; Cardputer display/input and real hardware behavior remain open |
 | Authentication and recovery | Separate graphical polkit agent, native PAM session lock, login/session supervision and recovery | Real PAM/compositor/VM checks and physical sleep/wake have different scopes |
 | Display, audio and power | Idle/output-power policy, brightness, PipeWire/WirePlumber volume/mute, sleep coordination and battery policy | Physical screen, codec, radio, battery and energy behavior remain device work |
 | Boot updates | Persistent ext4 ROOT and three FAT partitions with the same initial payload | Automatic A/B activation, health confirmation and rollback are not implemented |
@@ -21,6 +21,10 @@
 | Documentation and licensing | Primary English guides, full Russian translations and GPL-3.0-or-later with identified upstream exceptions | Distributed binaries still need a complete dependency notice/source bundle |
 
 The feature contracts are in [overview](overview.md), [settings](settings.md), [desktop](desktop.md), [security](security.md), [power and audio](power-audio.md) and [hardware](hardware.md). This page records readiness boundaries; it is not a second specification for those components.
+
+## Accepted software baseline
+
+The last full sequential software acceptance is [Alcard CI run 45096681285](https://github.com/IncubusElster/alcard/actions/runs/45096681285) for `164878f686511ed63d6471da30f2cd818e667829`. Its machine-readable `result.json` records all seven stages with exit code 0 and unchanged inputs. Nine signed APKs, five installed runtime groups, three login-mode VMs, Hello and 26 installed Settings scenarios passed. The VM checked ordinary-user doas/su, failed/cancelled authorization and terminal restoration, real NetworkManager virtual Ethernet DHCP/static IPv4, service recovery, EN/ES/RU locale, Shell theme and reboot persistence. The source is an **accepted software baseline**; subsequent documentation changes do not require claiming a new image or device acceptance. Keep the original run artifacts as evidence; Actions artifact retention is limited.
 
 ## How to read verification results
 
@@ -37,7 +41,7 @@ Use the run summary and artifacts to distinguish PASS, FAIL, BLOCKED, NOT RUN an
 
 ## Release limitations
 
-- Interactive Hello and the installed NetworkManager/Settings contract still need acceptance, including doas/su, denied or cancelled operations, profile changes and state after reboot. BlueZ protocol cases passed on a private bus; real service policy and physical pairing remain separate work.
+- The [full Alpine aarch64 acceptance on source commit `164878f`](https://github.com/IncubusElster/alcard/actions/runs/45096681285) passed: nine signed APKs, five runtime groups, all three login modes, interactive Hello, 26 installed Settings scenarios and reboot persistence. This is a software acceptance, not a physical Cardputer certification. Private-bus BlueZ/NetworkManager tests use simulated service peers; installed Settings uses real NetworkManager on isolated virtual Ethernet. Physical Wi-Fi and Bluetooth pairing and real bluetoothd service policy are untested.
 - The image verifier does not yet enforce a strict locked-root release policy. Explicit developer-root images share the ordinary output filename and do not record that mode in the manifest.
 - There is no configured public Alcard APK channel or implemented automatic BOOT update/recovery mechanism.
 - Physical display/input, interfaces, audio, charging, sleep/wake and energy measurements remain open for the intended board revision.

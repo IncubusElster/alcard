@@ -52,6 +52,8 @@ jobs:
           bash build.sh audit 2>&1 | tee .alcard-local/ci/static/build-audit.log
           python3 tools/check-docs.py 2>&1 | tee .alcard-local/ci/static/docs.log
           python3 scripts/ci/test-select.py 2>&1 | tee .alcard-local/ci/static/selection-tests.log
+          python3 tools/test-publication.py 2>&1 | tee .alcard-local/ci/static/publication-tests.log
+          python3 tools/check-publication.py 2>&1 | tee .alcard-local/ci/static/publication-audit.log
           python3 scripts/ci/test-hello-baseline.py 2>&1 | tee .alcard-local/ci/static/hello-baseline-tests.log
           python3 scripts/ci/hello/test-platform.py 2>&1 | tee .alcard-local/ci/static/hello-platform-tests.log
           python3 tools/test-package-metadata.py 2>&1 | tee .alcard-local/ci/static/metadata-tests.log

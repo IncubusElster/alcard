@@ -2,7 +2,7 @@
 
 **Language:** English · [Русский](../ru/roadmap.md)
 
-> Scope: current source tree · Updated: 2026-11-22
+> Scope: current source tree · Updated: 2026-11-23
 
 This is the single plan for the current source tree. [Current status](status.md) describes implemented capabilities and readiness boundaries. Opening the source repository as an experimental project and publishing a supported device image are separate milestones.
 
@@ -10,7 +10,7 @@ Package versions come from APKBUILD through the shared metadata reader. The sing
 
 ## 1. Finish source-publication preparation
 
-- [ ] Review the source bundle and remaining repository references for credentials, private signing material and unintended files. Revoke any live exposed credential; rewriting Git history does not revoke it.
+- [ ] Complete and review the tracked-source/reachable-history credential scan before opening; the reproducible CI audit in `tools/check-publication.py` checks Git paths and high-confidence patterns but cannot attest remote caches, deleted/unreachable objects, forks or credentials outside Git. Revoke any live exposed credential; rewriting Git history does not revoke it.
 - [ ] Review license scope and distributed source inputs against [licensing](licensing.md) and [third-party notices](../../THIRD_PARTY_NOTICES.md), retaining the separate GPL-2.0, BSD and CC0 terms.
 - [ ] Define a private security-reporting contact and verify that the documented channel is available.
 - [ ] Review the repository description, first source tag/release notes and branch safeguards.
@@ -22,15 +22,15 @@ Package versions come from APKBUILD through the shared metadata reader. The sing
 
 Run a bounded acceptance pass on the final SHA and actual APKs after relevant fixes. Preserve one-runner economy and avoid rebuilding a different package set between native and VM stages.
 
-Private D-Bus cases have verified NetworkManager operation ownership/cancellation and the BlueZ agent's prompt/cancel/disappearance lifecycle. Fresh signed APKs, native runtime and all three login-mode VM scenarios have passed. Interactive Hello and the installed Settings scenarios remain open; real radio and system BlueZ policy are separate device/service work. If only the allowed harness/documentation inputs changed, [Hello continuation](testing.md#hello-continuation-from-accepted-apkruntimelogin-stages) can reuse the verified package and login evidence.
+**Completed on the accepted software baseline:** [CI run 45096681285](https://github.com/IncubusElster/alcard/actions/runs/45096681285), source commit `164878f`, verified all seven sequential acceptance stages with the same nine signed APKs. Private D-Bus tested NetworkManager and BlueZ protocol lifecycle against simulated peers. Installed Settings used real NetworkManager and isolated virtual Ethernet; all 26 scenarios, persistent Hello, reboot and all three login modes passed. Physical radio, live bluetoothd policy and Cardputer hardware are explicitly outside this result. The [Hello continuation](testing.md#hello-continuation-from-accepted-apkruntimelogin-stages) remains available when only eligible harness/documentation inputs change.
 
-- [ ] Console retains functional Settings/networking after graphical package removal.
-- [ ] Test doas and root-password/su paths, denial/cancel, and terminal restoration after external prompts.
-- [ ] Exercise NetworkManager profile creation/application, wrong password, offline/unavailable services, timeout/cancel, saved profiles and persistence after reboot.
-- [ ] Test static IPv4/DHCP transitions and read back the applied state.
-- [ ] Check the single system-language setting in Settings, Shell and subsequent polkit/locker requests.
+- [x] Console retains functional Settings/networking after graphical package removal (installed VM).
+- [x] Test doas and root-password/su paths, denial/cancel, and terminal restoration after external prompts (installed VM).
+- [x] Exercise NetworkManager profile creation/application, unavailable service, saved profile and reboot persistence (real NetworkManager on virtual Ethernet); simulated Wi-Fi cancellation is separately covered by private-bus tests. Physical Wi-Fi password authentication remains untested.
+- [x] Test static IPv4/DHCP transitions and read back the applied state (real NetworkManager on virtual Ethernet).
+- [x] Check the single system-language setting in Settings, live Shell and newly opened polkit dialog; actual physical-device locker localization remains hardware-level work.
 
-**Completion:** publish a receipt separating real services, simulated devices and physical adapter work. The current parser/argument/render tests are retained but are not the whole integration claim.
+**Completion:** the [acceptance receipt](https://github.com/IncubusElster/alcard/actions/runs/45096681285) separates real services, simulated peers and physical-adapter work. Parser/argument/render tests remain complementary; this software milestone is closed. Hardware Wi-Fi/Bluetooth and real bluetoothd policy belong to physical/service acceptance, not this software milestone.
 
 ## 3. Prepare the next graphical application
 
