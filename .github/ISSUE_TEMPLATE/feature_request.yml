@@ -1,0 +1,29 @@
+name: Feature request
+description: Suggest a capability for the Alcard roadmap.
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check existing plans: https://github.com/IncubusElster/alcard/blob/main/docs/en/roadmap.md
+        Alcard targets a keyboard-first UI and a resource-constrained device.
+  - type: textarea
+    id: use_case
+    attributes:
+      label: User need or use case
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior
+      description: Mention keyboard/soft keys and Graphics, Graphics Minimal or Console where relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints and alternatives (optional)
+      description: Hardware revision, memory or battery cost, security boundary, dependencies or other ideas.
+    validations:
+      required: false

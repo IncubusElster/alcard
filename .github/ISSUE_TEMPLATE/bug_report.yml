@@ -1,0 +1,69 @@
+name: Bug report
+description: Report a reproducible non-security defect in Alcard.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Experimental project. See https://github.com/IncubusElster/alcard/blob/main/docs/en/status.md
+        Never include credentials, signing keys or unsanitized logs.
+        Please report vulnerabilities privately following SECURITY.md, not through Issues.
+  - type: input
+    id: revision
+    attributes:
+      label: Commit SHA or exact APK version
+      placeholder: "164878f or alcard-shell 0.1.0-r9"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Cardputer Zero v5
+        - Cardputer Zero v5-lite
+        - Other Cardputer Zero hardware
+        - Alpine ARM64 VM/container
+        - Alpine x86_64
+        - Other / unknown
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Installation or session mode
+      options:
+        - Graphics
+        - Graphics Minimal
+        - Console
+        - Hello / firstboot
+        - Build / packaging
+        - Other / unknown
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include prerequisites, commands and keyboard inputs.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Observed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized logs or screenshots (optional)
+      description: Remove personal information and secrets first. State whether this was tested on a physical device or in a VM.
+    validations:
+      required: false

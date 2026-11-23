@@ -55,7 +55,7 @@ These checks do not build APKs or boot a VM. Builds use a prepared Alpine aarch6
 
 **Software acceptance:** [full Alpine aarch64 acceptance on `164878f`](https://github.com/IncubusElster/alcard/actions/runs/45096681285) passed with nine freshly signed APKs, Graphics/Graphics Minimal/Console login, interactive Hello, installed Settings/NetworkManager and reboot persistence. Real daemon and virtual Ethernet behavior are distinguished from simulated BlueZ peers and device-specific fixtures in the CI receipts. Later documentation-only commits do not revalidate the binary image. Physical Cardputer display/input, radio, audio, suspend, battery and energy acceptance remain open.
 
-The [current status](docs/en/status.md) separates implemented features, automated checks and release limitations. Follow the [roadmap](docs/en/roadmap.md) for remaining work and [packaging](docs/en/packaging.md) for current package inputs.
+The [source preview notes](RELEASE_NOTES.md) describe the first source-only publication. The [current status](docs/en/status.md) separates implemented features, automated checks and release limitations. Follow the [roadmap](docs/en/roadmap.md) for remaining work and [packaging](docs/en/packaging.md) for current package inputs.
 
 ## License
 
