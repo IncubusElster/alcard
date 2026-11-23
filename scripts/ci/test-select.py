@@ -60,9 +60,10 @@ class SelectionTests(unittest.TestCase):
         self.git("add", "--all")
         self.git("commit", "-q", "-m", "Fixture input")
 
-    def scope(self, event="push", before=None, mode="source"):
+    def scope(self, event="push", before=None, mode="source", baseline=""):
         base = self.base if before is None else before
-        payload = {"before": base, "pull_request": {"base": {"sha": base}}}
+        payload = {"before": base, "pull_request": {"base": {"sha": base}},
+                   "inputs": {"baseline_run": baseline}}
         return SELECT.choose_scope(event, payload, mode, self.git)[0]
 
     def test_documentation_and_legal_only_stay_static(self):
@@ -101,6 +102,16 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(self.scope(mode="acceptance"), "static")
         with self.assertRaises(ValueError):
             self.scope(event="workflow_dispatch", mode="invalid")
+
+    def test_hello_continuation_requires_an_explicit_baseline(self):
+        self.assertEqual(self.scope(event="workflow_dispatch", mode="hello", baseline="123"), "hello")
+        for baseline in ("", "0", "-1", " 123", "123;false", "1" * 21):
+            with self.subTest(baseline=baseline), self.assertRaises(ValueError):
+                self.scope(event="workflow_dispatch", mode="hello", baseline=baseline)
+        for mode in ("source", "acceptance"):
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                self.scope(event="workflow_dispatch", mode=mode, baseline="123")
+        self.assertEqual(self.scope(mode="hello", baseline="123"), "source")
 
 
 if __name__ == "__main__":

@@ -118,12 +118,13 @@ It uses a disposable rootfs under `.alcard-local/`. Read [packaging](packaging.m
 | Code, build input or workflow change | The same preflight plus native Alpine source checks |
 | Manual `source` (default) | Preflight and all five native Alpine workspace checks |
 | Manual `acceptance` | Preflight, source checks once, private D-Bus cases, fresh current APKs, installed runtime, three login modes, interactive Hello and installed Settings |
+| Manual `hello` with `baseline_run` | Verify an earlier run's APK/runtime/login evidence and unchanged production inputs, then run a fresh persistent Hello/Settings guest with those exact signed APKs |
 
 Path selection includes board inputs, patches, package recipes, scripts, tools, keyboard/font data, Rust and the workflow itself. Unknown or incompletely compared paths select the source gate conservatively. Choosing a manual mode is an explicit cost decision; ordinary documentation work does not build APKs or boot a VM.
 
 The host orchestrator [run.sh](../../scripts/ci/run.sh) requires one disposable non-root Actions runner; it deliberately refuses an ordinary workstation invocation. [container.sh](../../scripts/ci/container.sh) installs dependencies and isolated test services only inside its disposable Alpine container, with source/package builds under a normal build user. Do not run fixture root-setup portions on a workstation or installed Cardputer.
 
-Source mode has a 25-minute internal budget and a 35-minute workflow limit. Acceptance has a 55-minute internal budget and a 65-minute workflow limit; the additional workflow allowance covers setup, cache and artifact handling. A timeout is a failed or cancelled check, not partial acceptance.
+Source mode has a 25-minute internal budget and a 35-minute workflow limit. Acceptance has a 55-minute internal budget and a 65-minute workflow limit. Hello continuation has a 20-minute internal budget and a 25-minute workflow limit. The additional workflow allowance covers setup, cache and artifact handling. A timeout is a failed or cancelled check, not partial acceptance.
 
 ### Source mode
 
@@ -133,11 +134,15 @@ The inexpensive orchestration fixtures can also run locally:
 
 ```sh
 python3 scripts/ci/test-select.py
+python3 scripts/ci/test-hello-baseline.py
+python3 scripts/ci/hello/test-platform.py
 python3 tools/test-package-metadata.py
 python3 scripts/ci/settings/test-observer.py
 ```
 
 They test path/mode selection, CI script names against Python standard-library collisions, safe startup of the Settings protocol runner, metadata parsing/drift and the private terminal observer's framing and redaction. The startup check stops at the runner's environment guard; it does not start a private bus or execute an integration case. These fixtures do not replace the application source or runtime gates.
+
+The baseline fixtures reject untrusted or incomplete receipts, modified production inputs and invalid archives. The QMP fixtures use small pipe peers to check startup diagnostics, reply handling, deadlines and cleanup without QEMU or guest code. For either VM mode, the Actions runner also initializes the actual Hello QEMU platform with stopped VCPUs and no disk, kernel or credentials before the expensive gates. The shared virtual NIC arguments explicitly disable the unused PXE option ROM. A successful platform check establishes QEMU startup, not a guest boot or a Settings result.
 
 ### Manual acceptance mode
 
@@ -152,7 +157,15 @@ Select the desired ref in GitHub Actions and choose `acceptance`. All stages use
 
 Native cases include real compositor/PAM and isolated PipeWire where specified; battery/backlight and mutating login1 operations use controlled fixtures. Virtual output hotplug does not establish SPI display hotplug or physical power savings. The VM uses Alpine userland on its virtual kernel, not the Cardputer firmware/BSP. See [power and audio](power-audio.md) and [security](security.md) for feature boundaries.
 
-The workflow caches dependencies and compiler output under `.alcard-local/ci-cache/`; it does not substitute a cached accepted APK set. Packages use ephemeral CI signing keys, not a public release key. Private guest credentials, full guest disks and signing private keys are excluded from uploaded evidence and cleaned by the harness.
+The workflow caches dependencies and compiler output under `.alcard-local/ci-cache/`; full acceptance always builds fresh APKs. Packages use ephemeral CI signing keys, not a public release key. Private guest credentials, full guest disks and signing private keys are excluded from uploaded evidence and cleaned by the harness.
+
+### Hello continuation from accepted APK/runtime/login stages
+
+Use manual mode `hello` and provide `baseline_run` when a trusted full acceptance run completed its source, protocol, APK, native runtime and all three login-mode stages, and only Hello/Settings needs another pass. The run must be a completed manual `Alcard CI` run on `main` in the same repository, with an available artifact from its exact attempt. Its commit must be an ancestor of the current checkout. An overall failed run is eligible only when the preceding six stages passed and its final failure was the Hello/Settings stage.
+
+[hello-baseline.py](../../scripts/ci/hello-baseline.py) retrieves the artifact with the workflow's read-only Actions token through `gh api`. It checks the archive digest and paths, the original clean source fingerprint against Git, successful component receipts, nine APK hashes and the public signing key. Production inputs must match the current clean checkout. The only permitted differences are the documented CI orchestration/continuation files, the Hello/Settings harness and Markdown files under `docs/`; changes to production code, recipes, lockfiles, native acceptance gates or other build inputs require full `acceptance`.
+
+The continuation imports those exact signed APKs, creates a fresh private Hello guest and runs the ordinary interactive Hello, Settings, reboot/persistence and idle-sampling scenarios. It skips Cargo caches, package compilation, native runtime and the already accepted three-mode login pass. Imported evidence and `verification.json` live under `.alcard-local/ci/hello/baseline/`; the current continuation result is `.alcard-local/ci/hello/result.json`. Inspect both source identities and their shared APK hashes. A successful continuation is a composite receipt with explicitly reused scopes; the original failed run remains failed. Expired, incomplete or incompatible baseline artifacts require a new full acceptance run.
 
 ### Results and artifacts
 

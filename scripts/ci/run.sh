@@ -1,18 +1,26 @@
 #!/usr/bin/env bash
 # One ARM runner: current source, optionally followed by fresh signed APKs,
 # installed runtime, three login modes, interactive Hello and Settings.
+# Hello continuation reuses verified APK/runtime/login receipts only when
+# production inputs are unchanged; it builds one fresh private Hello guest.
 # Source mode needs Docker; acceptance also needs QEMU and Python Pillow.
 # Cache only dependencies/compiler output. Never upload guest credential disks,
 # signing private keys, or the Cargo target/cache tree.
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 if [[ ${1:-} == --help ]]; then
-    echo 'Usage: bash scripts/ci/run.sh source|acceptance (one disposable ARM64 Actions runner)'
-    echo 'Hard limit: source 25 minutes; acceptance 55 minutes, with no parallel runner or VM.'
+    echo 'Usage: bash scripts/ci/run.sh source|acceptance|hello (one disposable ARM64 Actions runner)'
+    echo 'Hard limit: source 25 minutes; acceptance 55 minutes; hello 20 minutes, with no parallel runner or VM.'
+    echo 'Hello requires ALCARD_CI_BASELINE_RUN and a read-only GH_TOKEN for the trusted baseline artifact.'
     exit 0
 fi
 mode=${1:-}
-case "$mode" in source) budget=25m ;; acceptance) budget=55m ;; *) echo 'Expected source or acceptance' >&2; exit 2 ;; esac
+case "$mode" in
+    source) budget=25m ;;
+    acceptance) budget=55m ;;
+    hello) budget=20m ;;
+    *) echo 'Expected source, acceptance or hello' >&2; exit 2 ;;
+esac
 [[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ARCH:-} == ARM64 &&
    $(uname -m) == aarch64 && $(id -u) != 0 ]] || {
     echo 'Use one disposable, nonroot ubuntu-24.04-arm Actions runner' >&2
@@ -27,9 +35,17 @@ cd "$ROOT"
 for command in docker python3 timeout git; do
     command -v "$command" >/dev/null
 done
-if [[ $mode == acceptance ]]; then
+if [[ $mode == acceptance || $mode == hello ]]; then
     command -v qemu-system-aarch64 >/dev/null
     python3 -c 'from PIL import Image'
+    export ALCARD_LOGIN_VM_TEST=1
+fi
+if [[ $mode == hello ]]; then
+    command -v gh >/dev/null
+    [[ ${ALCARD_CI_BASELINE_RUN:-} =~ ^[1-9][0-9]{0,19}$ ]] || {
+        echo 'Hello continuation requires a numeric baseline run' >&2
+        exit 2
+    }
 fi
 [[ ! -L .alcard-local ]] || exit 1
 OUT="$ROOT/.alcard-local/ci/$mode"
@@ -127,8 +143,10 @@ after = json.loads((out / 'inputs-after.json').read_text())
 unchanged = before == after
 if not unchanged:
     result = 1
-report = {'schema': 1, 'scope': ('Native Alpine aarch64 source checks' if mode == 'source' else
-                               'Native Alpine aarch64 source, current signed APKs, installed runtime, login, Hello and Settings'),
+scope = {'source': 'Native Alpine aarch64 source checks',
+         'acceptance': 'Native Alpine aarch64 source, current signed APKs, installed runtime, login, Hello and Settings',
+         'hello': 'Hello/Settings continuation with verified unchanged production APKs'}[mode]
+report = {'schema': 1, 'scope': scope,
           'exit_code': result, 'seconds': int(time.time()) - started,
           'last_stage': stage, 'inputs_unchanged': unchanged,
           'stages': [json.loads(path.read_text()) for path in sorted((out / 'stages').glob('*.json'))],
@@ -140,6 +158,12 @@ report = {'schema': 1, 'scope': ('Native Alpine aarch64 source checks' if mode =
                            (['APK build/install', 'native authentication and login VM',
                              'interactive Hello, installed Settings and idle sample',
                              'private-bus NetworkManager/BlueZ integration'] if mode == 'source' else [])}
+if mode == 'hello':
+    baseline = out / 'baseline/verification.json'
+    report['baseline'] = json.loads(baseline.read_text()) if baseline.is_file() else None
+    report['not_performed_this_run'] = [
+        'Native source and private-bus cases', 'Fresh APK compilation and native runtime',
+        'Three installation-mode login scenarios']
 (out / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
 print(f"{'PASS' if result == 0 else 'FAIL'}: Alpine aarch64 {mode}; last stage {stage}.")
 raise SystemExit(0 if result == 0 else 1)
@@ -187,6 +211,20 @@ if [[ $mode == source ]]; then
     current_stage=complete
     exit 0
 fi
+if [[ $mode == hello ]]; then
+    stage 01-verify-hello-baseline 120 \
+        python3 scripts/ci/hello-baseline.py prepare "$ALCARD_CI_BASELINE_RUN" "$OUT/baseline" "$INPUT"
+    # The read-only repository token is needed only while retrieving the APKs.
+    unset GH_TOKEN
+    stage 02-build-hello-guest 300 \
+        docker run --rm --init --name "$CONTAINER-guest" -e ALCARD_LOGIN_VM_BUILD=1 \
+        --mount "type=bind,src=$ROOT,dst=/work" \
+        alpine:3.24 sh /work/scripts/ci/hello/build-guest.sh
+    stage 03-interactive-hello-settings 900 \
+        python3 scripts/ci/hello/driver.py --directory "$LOGIN"
+    current_stage=complete
+    exit 0
+fi
 stage 01-native-source-apk-runtime 1800 \
     docker run --rm --init --name "$CONTAINER" \
     -e ALCARD_CI_CONTAINER=1 -e ALCARD_CI_ACCEPTANCE=1 -e ALCARD_CI_SCOPE=acceptance \
@@ -213,7 +251,6 @@ stage 03-build-login-guest 300 \
     docker run --rm --init --name "$CONTAINER-guest" -e ALCARD_LOGIN_VM_BUILD=1 \
     --mount "type=bind,src=$ROOT,dst=/work" \
     alpine:3.24 sh /work/scripts/build-login-vm.sh
-export ALCARD_LOGIN_VM_TEST=1
 stage 04-sequential-login-modes 1080 \
     bash scripts/test-login-vm.sh --modes graphics graphics_minimal console
 # Use the same signed APKs for a fresh persistent Hello disk. The earlier VM

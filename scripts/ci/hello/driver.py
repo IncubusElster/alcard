@@ -25,6 +25,10 @@ SETTINGS_SPEC = importlib.util.spec_from_file_location(
     'installed_settings_acceptance', REPOSITORY / 'scripts/ci/settings/driver.py')
 SETTINGS = importlib.util.module_from_spec(SETTINGS_SPEC)
 SETTINGS_SPEC.loader.exec_module(SETTINGS)
+PLATFORM_SPEC = importlib.util.spec_from_file_location(
+    'alcard_hello_qemu_platform', Path(__file__).with_name('qemu_platform.py'))
+PLATFORM = importlib.util.module_from_spec(PLATFORM_SPEC)
+PLATFORM_SPEC.loader.exec_module(PLATFORM)
 
 
 class HelloFrames(LOGIN.ShellFrames):
@@ -126,23 +130,17 @@ class HelloMachine(LOGIN.Machine):
         self.serial = (self.work / 'serial.log').open('wb')
         self.stderr = (self.work / 'qemu.log').open('wb')
         command = [
-            'qemu-system-aarch64', '-machine', 'virt', '-accel', 'tcg,thread=multi',
-            '-cpu', 'max', '-smp', '2', '-m', '512',
+            'qemu-system-aarch64', *PLATFORM.MACHINE_ARGUMENTS,
             '-kernel', str(private / 'vmlinuz-virt'),
             '-initrd', str(private / 'initramfs-virt'),
             '-append', 'root=/dev/vda rw rootfstype=ext4 modules=virtio_pci,virtio_blk,ext4 '
                        'console=ttyAMA0 console=tty0 alcard_ci_vm=1',
             '-drive', f'file={disk},format=raw,if=none,id=rootdisk',
             '-device', 'virtio-blk-pci,drive=rootdisk',
-            '-device', 'virtio-gpu-pci,xres=320,yres=170,max_outputs=1,edid=off',
-            '-device', 'qemu-xhci,id=usb', '-device', 'usb-kbd,bus=usb.0',
-            '-display', 'none', '-monitor', 'none', '-no-reboot',
-            '-netdev', 'user,id=settingsnet,restrict=on,net=192.0.2.0/24,dhcpstart=192.0.2.100',
-            '-device', 'virtio-net-pci,netdev=settingsnet,mac=52:54:00:12:34:56',
+            *PLATFORM.DEVICE_ARGUMENTS,
             '-qmp', f'unix:{qmp_socket},server=on,wait=off',
             '-serial', 'stdio',
             '-chardev', f'socket,id=control,path={observer_socket},server=on,wait=off',
-            '-device', 'virtio-serial-pci',
             '-device', 'virtserialport,chardev=control,name=org.alcard.ci',
         ]
         self.process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
@@ -409,8 +407,17 @@ class HelloMachine(LOGIN.Machine):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--directory', type=Path, required=True)
+    modes = parser.add_mutually_exclusive_group(required=True)
+    modes.add_argument('--directory', type=Path)
+    modes.add_argument('--check-platform', action='store_true',
+                       help='Check the stopped QEMU platform without a guest disk or kernel')
     arguments = parser.parse_args()
+    if arguments.check_platform:
+        if (os.getuid() == 0 or os.environ.get('GITHUB_ACTIONS') != 'true' or
+                os.environ.get('RUNNER_ARCH') != 'ARM64' or os.uname().machine != 'aarch64'):
+            raise SystemExit('Only the disposable nonroot ARM64 Actions runner may check this platform')
+        PLATFORM.check_platform()
+        return
     if os.getuid() == 0 or os.environ.get('ALCARD_LOGIN_VM_TEST') != '1':
         raise SystemExit('Only the isolated nonroot CI host may run this gate')
     machine = HelloMachine(arguments.directory.resolve())

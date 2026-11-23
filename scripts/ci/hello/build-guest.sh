@@ -1,5 +1,5 @@
 #!/bin/sh
-# The same just-built signed APKs; private observer changes only in this guest.
+# Verified signed APKs identified by artifact-hashes.log; private guest observers.
 set -eu
 [ "${ALCARD_LOGIN_VM_BUILD:-}" = 1 ] && [ -f /.dockerenv ] || exit 1
 sh /work/scripts/build-login-vm.sh
@@ -25,19 +25,18 @@ printf '%s\n' '[main]' 'no-auto-default=*' \
     > "$sysroot/etc/NetworkManager/conf.d/90-alcard-ci-settings.conf"
 chroot "$sysroot" /bin/sh -eu -c \
     'set -- /lib/modules/*; [ "$#" = 1 ]; exec modinfo -k "${1##*/}" virtio_net' > /dev/null
-# The earlier login VMs have exited. This new writable disk belongs only to the
-# Hello scenario and persists across its reboot; no private disk is exported.
+# Only one guest runs at a time. This new writable disk belongs to the Hello
+# scenario and persists across its reboot; no private disk is exported.
 mkfs.ext4 -F -L ALCARDHELLO -d "$sysroot" "$out/private/rootfs.ext4" \
     > "$out/evidence/ext4-hello.log" 2>&1
 printf '%s\n' \
-    'Interactive Hello uses the same current signed APKs as the login scenarios.' \
+    'Interactive Hello uses verified signed APKs identified by artifact-hashes.log.' \
     'Private observers, PTY Settings driver and resource sampler are added; Hello provisions the account.' \
     'Settings uses real NetworkManager over isolated QEMU usernet Ethernet; Wi-Fi RF is not exercised.' \
     'One writable private disk persists across both Hello boot lifetimes and is never uploaded.' \
     >> "$out/evidence/platform.txt"
-# The login modes used the first guest build. Its public receipts are already
-# preserved in login-build/; keep this separately resolved virtual-kernel build
-# identifiable instead of overwriting the first guest's package/kernel record.
+# Keep this guest's package/kernel receipts separate from the login baseline.
+# That baseline may come from earlier stages of this job or a verified artifact.
 python3 - "$out/evidence" <<'PY'
 from pathlib import Path
 import sys
@@ -53,4 +52,4 @@ PY
 chmod 700 "$out/private"
 chmod 600 "$out/private/rootfs.ext4"
 chown -R "$(stat -c %u:%g /work)" "$out"
-echo 'PASS: persistent Hello guest prepared from this run signed APKs.'
+echo 'PASS: persistent Hello guest prepared from the verified signed APK set.'

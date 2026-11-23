@@ -22,12 +22,12 @@ Package versions come from APKBUILD through the shared metadata reader. The sing
 
 Run a bounded acceptance pass on the final SHA and actual APKs after relevant fixes. Preserve one-runner economy and avoid rebuilding a different package set between native and VM stages.
 
+Private D-Bus cases have verified NetworkManager operation ownership/cancellation and the BlueZ agent's prompt/cancel/disappearance lifecycle. Fresh signed APKs, native runtime and all three login-mode VM scenarios have passed. Interactive Hello and the installed Settings scenarios remain open; real radio and system BlueZ policy are separate device/service work. If only the allowed harness/documentation inputs changed, [Hello continuation](testing.md#hello-continuation-from-accepted-apkruntimelogin-stages) can reuse the verified package and login evidence.
+
 - [ ] Console retains functional Settings/networking after graphical package removal.
 - [ ] Test doas and root-password/su paths, denial/cancel, and terminal restoration after external prompts.
 - [ ] Exercise NetworkManager profile creation/application, wrong password, offline/unavailable services, timeout/cancel, saved profiles and persistence after reboot.
-- [ ] Verify operation-owned cancellation with a previous/concurrent connection, delayed activation replies and a restarted service; distinguish confirmed cleanup from an unconfirmed cancellation result.
 - [ ] Test static IPv4/DHCP transitions and read back the applied state.
-- [ ] Exercise the BlueZ agent's PIN/passkey/confirmation/cancel lifecycle and disappearance of a device.
 - [ ] Check the single system-language setting in Settings, Shell and subsequent polkit/locker requests.
 
 **Completion:** publish a receipt separating real services, simulated devices and physical adapter work. The current parser/argument/render tests are retained but are not the whole integration claim.

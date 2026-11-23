@@ -7,14 +7,20 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Source checks, or current APK/runtime/login/Hello/Settings acceptance
+        description: Source checks, full acceptance, or Hello continuation from verified APKs
         type: choice
         required: true
         default: source
-        options: [source, acceptance]
+        options: [source, acceptance, hello]
+      baseline_run:
+        description: For hello only, the run with accepted APK/runtime/login stages
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
+  actions: read
 
 # One running workflow for the repository, including manual acceptance. A new
 # push waits instead of discarding a paid acceptance run that is already active.
@@ -26,7 +32,7 @@ jobs:
   alpine:
     name: One ARM runner, sequential checks
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: ${{ inputs.mode == 'acceptance' && 65 || 35 }}
+    timeout-minutes: ${{ inputs.mode == 'acceptance' && 65 || inputs.mode == 'hello' && 25 || 35 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,12 +52,14 @@ jobs:
           bash build.sh audit 2>&1 | tee .alcard-local/ci/static/build-audit.log
           python3 tools/check-docs.py 2>&1 | tee .alcard-local/ci/static/docs.log
           python3 scripts/ci/test-select.py 2>&1 | tee .alcard-local/ci/static/selection-tests.log
+          python3 scripts/ci/test-hello-baseline.py 2>&1 | tee .alcard-local/ci/static/hello-baseline-tests.log
+          python3 scripts/ci/hello/test-platform.py 2>&1 | tee .alcard-local/ci/static/hello-platform-tests.log
           python3 tools/test-package-metadata.py 2>&1 | tee .alcard-local/ci/static/metadata-tests.log
           python3 scripts/ci/settings/test-observer.py 2>&1 | tee .alcard-local/ci/static/settings-observer-tests.log
           python3 tools/package_metadata.py manifest > .alcard-local/ci/static/package-recipes.json
 
       - name: Resolve Alpine image and toolchain cache context
-        if: steps.plan.outputs.scope != 'static'
+        if: steps.plan.outputs.scope == 'source' || steps.plan.outputs.scope == 'acceptance'
         id: toolchain
         timeout-minutes: 2
         run: |
@@ -65,7 +73,7 @@ jobs:
           printf 'key=%s\n' "$context_key" >> "$GITHUB_OUTPUT"
 
       - name: Restore dependency and compiler caches
-        if: steps.plan.outputs.scope != 'static'
+        if: steps.plan.outputs.scope == 'source' || steps.plan.outputs.scope == 'acceptance'
         id: cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         timeout-minutes: 3
@@ -77,16 +85,31 @@ jobs:
           restore-keys: |
             alcard-arm64-v1-${{ steps.toolchain.outputs.key }}-${{ hashFiles('rust/**/Cargo.lock') }}-
 
-      - name: Install VM tools only for explicit acceptance
-        if: steps.plan.outputs.scope == 'acceptance'
+      - name: Install tools for explicit VM checks
+        if: steps.plan.outputs.scope == 'acceptance' || steps.plan.outputs.scope == 'hello'
+        env:
+          ALCARD_CI_SCOPE: ${{ steps.plan.outputs.scope }}
         run: |
+          set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-system-arm python3-pil
+          if [[ "$ALCARD_CI_SCOPE" == hello ]]; then
+            sudo apt-get install -y -qq --no-install-recommends gh
+          fi
+
+      - name: Check the Hello QEMU platform before expensive gates
+        if: steps.plan.outputs.scope == 'acceptance' || steps.plan.outputs.scope == 'hello'
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/hello/driver.py --check-platform 2>&1 | tee .alcard-local/ci/static/hello-platform.log
 
       - name: Run the selected Alpine gates sequentially
         if: steps.plan.outputs.scope != 'static'
         env:
           ALCARD_CI_SCOPE: ${{ steps.plan.outputs.scope }}
+          ALCARD_CI_BASELINE_RUN: ${{ inputs.baseline_run || '' }}
+          GH_TOKEN: ${{ steps.plan.outputs.scope == 'hello' && github.token || '' }}
         run: bash scripts/ci/run.sh "$ALCARD_CI_SCOPE"
 
       - name: Remove disposable guest credentials
@@ -94,7 +117,7 @@ jobs:
         run: rm -rf -- .alcard-local/ci-login/private
 
       - name: Restore cache ownership to the runner
-        if: always() && steps.plan.outputs.scope != 'static'
+        if: always() && (steps.plan.outputs.scope == 'source' || steps.plan.outputs.scope == 'acceptance')
         timeout-minutes: 1
         run: |
           cache_path="$GITHUB_WORKSPACE/.alcard-local/ci-cache"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Select static, source or explicit acceptance without excluding changed code.
+"""Select static, source, acceptance or an explicit Hello continuation.
 
 No workflow-level path filter can leave a required check permanently pending.
 Unknown paths and unavailable ancestry conservatively select the source gate.
@@ -26,8 +26,14 @@ def documentation_only(paths):
 
 def choose_scope(event_name, event, mode, git):
     if event_name == "workflow_dispatch":
-        if mode not in {"source", "acceptance"}:
-            raise ValueError("Manual CI mode must be source or acceptance")
+        if mode not in {"source", "acceptance", "hello"}:
+            raise ValueError("Manual CI mode must be source, acceptance or hello")
+        baseline = event.get("inputs", {}).get("baseline_run", "")
+        if mode == "hello":
+            if not isinstance(baseline, str) or not re.fullmatch(r"[1-9][0-9]{0,19}", baseline):
+                raise ValueError("Hello continuation requires a numeric baseline_run")
+        elif baseline:
+            raise ValueError("baseline_run is only valid for Hello continuation")
         return mode, [], "Explicit manual selection"
     if event_name == "pull_request":
         base = event.get("pull_request", {}).get("base", {}).get("sha", "")
