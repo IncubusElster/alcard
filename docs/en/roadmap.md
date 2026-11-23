@@ -10,7 +10,7 @@ Package versions come from APKBUILD through the shared metadata reader. The sing
 
 ## 1. Finish source-publication preparation
 
-- [ ] Complete and review the tracked-source/reachable-history credential scan before opening; the reproducible CI audit in `tools/check-publication.py` checks Git paths and high-confidence patterns but cannot attest remote caches, deleted/unreachable objects, forks or credentials outside Git. Revoke any live exposed credential; rewriting Git history does not revoke it.
+- [x] Review tracked source and reachable Git history for credentials, private signing material and unintended files. The [publication audit CI](https://github.com/IncubusElster/alcard/actions/runs/45108772145) passed with no high-confidence secret matches, sensitive tracked paths or literal-credential assignment candidates. `tools/check-publication.py` checks all reachable Git blobs and paths on each CI run; remote caches, unreachable objects, forks and secrets outside Git are outside its scope. Revoke any live exposed credential independently of Git history rewriting.
 - [ ] Review license scope and distributed source inputs against [licensing](licensing.md) and [third-party notices](../../THIRD_PARTY_NOTICES.md), retaining the separate GPL-2.0, BSD and CC0 terms.
 - [ ] Define a private security-reporting contact and verify that the documented channel is available.
 - [ ] Review the repository description, first source tag/release notes and branch safeguards.
